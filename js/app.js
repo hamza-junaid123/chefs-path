@@ -65,6 +65,81 @@
     return null;
   }
 
+  /* ---- content translation overlay ------------------------------------
+     CONTENT_I18N[lang][lessonId] holds translated fields (see
+     js/content-translations.js). Any missing field falls back to English,
+     so partial translations render cleanly. */
+
+  function levelOverlay(levelId) {
+    const lang = I18N.getLang();
+    return (window.CONTENT_I18N && CONTENT_I18N[lang] && CONTENT_I18N[lang].levels &&
+            CONTENT_I18N[lang].levels[levelId]) || null;
+  }
+
+  function locLevelTitle(level) {
+    const ov = levelOverlay(level.id);
+    return (ov && ov.title) || level.title;
+  }
+  function locLevelSubtitle(level) {
+    const ov = levelOverlay(level.id);
+    return (ov && ov.subtitle) || level.subtitle;
+  }
+
+  function lessonOverlay(lessonId) {
+    const lang = I18N.getLang();
+    return (window.CONTENT_I18N && CONTENT_I18N[lang] && CONTENT_I18N[lang][lessonId]) || null;
+  }
+
+  /* Merge a lesson with its translation overlay for the active language. */
+  function localizedLesson(lesson) {
+    const ov = lessonOverlay(lesson.id);
+    if (!ov || lesson.stub) return lesson;
+    const ovt = ov.technique || {};
+    const ovr = ov.recipe || {};
+    return {
+      id: lesson.id,
+      stub: lesson.stub,
+      minutes: lesson.minutes,
+      title: ov.title || lesson.title,
+      intro: ov.intro || lesson.intro,
+      technique: {
+        heading: ovt.heading || lesson.technique.heading,
+        steps: lesson.technique.steps.map(function (st, i) {
+          return {
+            text: (ovt.steps && ovt.steps[i]) || st.text,
+            tip: (ovt.tips && ovt.tips[i] != null) ? ovt.tips[i] : st.tip
+          };
+        })
+      },
+      recipe: {
+        name: ovr.name || lesson.recipe.name,
+        description: ovr.description || lesson.recipe.description,
+        servings: lesson.recipe.servings,
+        time: ovr.time || lesson.recipe.time,
+        ingredients: lesson.recipe.ingredients.map(function (ing, i) {
+          return {
+            qty: ing.qty,
+            unit: (ovr.units && ovr.units[i] != null) ? ovr.units[i] : ing.unit,
+            item: (ovr.ingredients && ovr.ingredients[i]) || ing.item
+          };
+        }),
+        steps: lesson.recipe.steps.map(function (s, i) {
+          return (ovr.steps && ovr.steps[i]) || s;
+        })
+      },
+      quiz: lesson.quiz.map(function (q, i) {
+        const oq = ov.quiz && ov.quiz[i];
+        return {
+          q: (oq && oq.q) || q.q,
+          options: q.options.map(function (o, j) {
+            return (oq && oq.options && oq.options[j]) || o;
+          }),
+          answer: q.answer
+        };
+      })
+    };
+  }
+
   function levelCompletion(level) {
     const total = level.lessons.length;
     if (!total) return 0;
@@ -107,11 +182,12 @@
       for (const lesson of level.lessons) {
         if (lesson.stub || isLessonComplete(lesson.id)) continue;
         const s = lessonState(lesson.id);
+        const ll = localizedLesson(lesson);
         return {
-          lesson: lesson,
+          lesson: ll,
           level: level,
           action: s.quizPassed && !s.cooked
-            ? t("quiz_passed_cook") + " — " + lesson.recipe.name
+            ? t("quiz_passed_cook") + " — " + ll.recipe.name
             : (s.cooked && !s.quizPassed
               ? t("cooked_take_quiz")
               : "~" + lesson.minutes + " " + t("min_short"))
@@ -127,7 +203,8 @@
     if (!cookable.length) return null;
     const dayIndex = Math.floor(Date.now() / 86400000) % cookable.length;
     const pick = cookable[dayIndex];
-    return { lesson: pick.lesson, level: pick.level, action: pick.lesson.recipe.name, revisit: true };
+    const pl = localizedLesson(pick.lesson);
+    return { lesson: pl, level: pick.level, action: pl.recipe.name, revisit: true };
   }
 
   /* ------------------------------------------------------------------
@@ -328,8 +405,8 @@
           '<div class="level-icon">' + (unlocked ? level.icon : "🔒") + '</div>' +
           '<div class="level-title-wrap">' +
             '<div class="level-num">' + t("level") + " " + level.id + '</div>' +
-            '<div class="level-title">' + esc(level.title) + '</div>' +
-            '<div class="level-sub">' + esc(level.subtitle) + '</div>' +
+            '<div class="level-title">' + esc(locLevelTitle(level)) + '</div>' +
+            '<div class="level-sub">' + esc(locLevelSubtitle(level)) + '</div>' +
             (unlocked && levelHasContent(level) ? progressBar(ratio) : "") +
           '</div>' +
           '<div class="level-meta">' +
@@ -362,7 +439,7 @@
             : "~" + lesson.minutes + " " + t("min_short"));
           html += '<a class="lesson-row" href="#/lesson/' + lesson.id + '">' +
             '<span class="lesson-status ' + statusCls + '">' + statusIcon + '</span>' +
-            '<span class="lesson-row-title">' + esc(lesson.title) + '</span>' +
+            '<span class="lesson-row-title">' + esc(localizedLesson(lesson).title) + '</span>' +
             '<span class="lesson-row-meta">' + esc(meta) + '</span>' +
           '</a>';
         }
@@ -381,7 +458,7 @@
   function viewLesson(lessonId) {
     const found = findLesson(lessonId);
     if (!found || found.lesson.stub) { return viewNotFound(); }
-    const level = found.level, lesson = found.lesson;
+    const level = found.level, lesson = localizedLesson(found.lesson);
 
     if (!isLevelUnlocked(level)) {
       app.innerHTML =
@@ -433,7 +510,7 @@
       app.innerHTML =
         '<div class="breadcrumb"><a href="#/learn">' + t("back_to_learn") + '</a></div>' +
         '<div class="lesson-head">' +
-          '<span class="chip">' + t("level") + " " + level.id + ' · ' + esc(level.title) + '</span>' +
+          '<span class="chip">' + t("level") + " " + level.id + ' · ' + esc(locLevelTitle(level)) + '</span>' +
           '<span class="chip green">~' + lesson.minutes + ' ' + t("min_short") + '</span>' +
           '<h1>' + esc(lesson.title) + '</h1>' +
         '</div>' +
@@ -486,7 +563,7 @@
     }
 
     function nextLessonLink(level, lesson) {
-      const idx = level.lessons.indexOf(lesson);
+      const idx = level.lessons.findIndex(function (l) { return l.id === lesson.id; });
       const next = level.lessons[idx + 1];
       if (next && !next.stub) {
         return '<a class="btn btn-ghost" href="#/lesson/' + next.id + '">' + t("next_lesson") + '</a>';
@@ -657,7 +734,7 @@
       html += '<div class="card progress-row' + (unlocked ? "" : " locked") + '">' +
         '<div class="level-icon">' + (unlocked ? level.icon : "🔒") + '</div>' +
         '<div class="progress-row-body">' +
-          '<div class="progress-row-title">' + t("level") + " " + level.id + ": " + esc(level.title) + '</div>' +
+          '<div class="progress-row-title">' + t("level") + " " + level.id + ": " + esc(locLevelTitle(level)) + '</div>' +
           (unlocked
             ? (hasContent ? progressBar(ratio)
                : '<span class="level-sub">' + t("coming_soon") + '</span>')
@@ -715,13 +792,14 @@
 
     html += '<div class="recipes-grid">';
     for (const item of learned) {
-      const r = item.lesson.recipe;
+      const ll = localizedLesson(item.lesson);
+      const r = ll.recipe;
       html += '<div class="card recipe-tile" data-lesson="' + item.lesson.id + '">' +
         '<button type="button" class="recipe-tile-head">' +
-          PICS.pic(item.lesson.id, "thumb", item.lesson.recipe.name) +
+          PICS.pic(item.lesson.id, "thumb", r.name) +
           '<div style="flex:1;min-width:0">' +
             '<div class="recipe-tile-title">' + esc(r.name) + '</div>' +
-            '<div class="recipe-tile-sub">' + t("level") + " " + item.level.id + " · " + esc(item.lesson.title) +
+            '<div class="recipe-tile-sub">' + t("level") + " " + item.level.id + " · " + esc(ll.title) +
               " · ⏱ " + esc(r.time) + '</div>' +
           '</div>' +
           '<span class="recipe-tile-chevron">▾</span>' +
@@ -734,12 +812,13 @@
 
     function renderTileBody(tile, lessonId) {
       const found = findLesson(lessonId);
+      const recipe = localizedLesson(found.lesson).recipe;
       const body = tile.querySelector(".recipe-tile-body");
-      body.innerHTML = recipeHtml(found.lesson.recipe, lessonId, { servings: servingsMap[lessonId] }) +
+      body.innerHTML = recipeHtml(recipe, lessonId, { servings: servingsMap[lessonId] }) +
         '<br><a class="btn btn-ghost" href="#/lesson/' + lessonId + '">' + t("open_full_lesson") + '</a>';
       if (typeof Voice !== "undefined") Voice.bind(body);
       bindServingsControls(body, servingsMap,
-        function (key) { return findLesson(key).lesson.recipe; },
+        function (key) { return localizedLesson(findLesson(key).lesson).recipe; },
         function (key) { renderTileBody(tile, key); });
     }
 

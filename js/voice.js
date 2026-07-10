@@ -11,6 +11,14 @@ const Voice = (function () {
     return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
   }
 
+  const SPEECH_LOCALE = {
+    en: "en-US", ur: "ur-PK", ar: "ar-SA", hi: "hi-IN", es: "es-ES", fr: "fr-FR"
+  };
+  function speechLocale() {
+    const lang = (typeof I18N !== "undefined") ? I18N.getLang() : "en";
+    return SPEECH_LOCALE[lang] || "en-US";
+  }
+
   function stop() {
     if (!supported()) return;
     window.speechSynthesis.cancel();
@@ -24,7 +32,7 @@ const Voice = (function () {
     if (!supported()) return;
     stop();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = "en-US"; // course content is English
+    u.lang = speechLocale(); // match the selected UI/content language
     u.rate = 0.95;
     u.onend = function () {
       if (activeBtn === btn) {
