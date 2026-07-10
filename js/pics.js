@@ -75,5 +75,23 @@ const PICS = (function () {
       "</svg>";
   }
 
-  return { picSvg: picSvg, SCENES: SCENES };
+  /* Real bundled photo for a lesson, or "" if none (e.g. stub lessons).
+     All seeded lessons in SCENES have a matching img/<id>.jpg. */
+  function photoFor(lessonId) {
+    return SCENES[lessonId] ? "img/" + lessonId + ".jpg" : "";
+  }
+
+  /* Preferred entry point: a real food photo when we have one, else the
+     SVG scene as a graceful fallback. */
+  function pic(lessonId, variant, alt) {
+    const src = photoFor(lessonId);
+    if (!src) return picSvg(lessonId, variant);
+    const a = (alt || "").replace(/"/g, "&quot;");
+    if (variant === "thumb") {
+      return '<img class="pic-thumb-photo" src="' + src + '" alt="" loading="lazy">';
+    }
+    return '<img class="pic-hero-photo" src="' + src + '" alt="' + a + '" loading="lazy">';
+  }
+
+  return { pic: pic, picSvg: picSvg, photoFor: photoFor, SCENES: SCENES };
 })();

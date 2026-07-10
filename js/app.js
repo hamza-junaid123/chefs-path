@@ -437,7 +437,7 @@
           '<span class="chip green">~' + lesson.minutes + ' ' + t("min_short") + '</span>' +
           '<h1>' + esc(lesson.title) + '</h1>' +
         '</div>' +
-        PICS.picSvg(lesson.id, "wide") +
+        PICS.pic(lesson.id, "wide", lesson.recipe.name) +
 
         (complete ? '<div class="completion-banner">' + t("lesson_complete_banner") + '</div>' : "") +
 
@@ -718,7 +718,7 @@
       const r = item.lesson.recipe;
       html += '<div class="card recipe-tile" data-lesson="' + item.lesson.id + '">' +
         '<button type="button" class="recipe-tile-head">' +
-          PICS.picSvg(item.lesson.id, "thumb") +
+          PICS.pic(item.lesson.id, "thumb", item.lesson.recipe.name) +
           '<div style="flex:1;min-width:0">' +
             '<div class="recipe-tile-title">' + esc(r.name) + '</div>' +
             '<div class="recipe-tile-sub">' + t("level") + " " + item.level.id + " · " + esc(item.lesson.title) +
