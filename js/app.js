@@ -1,7 +1,8 @@
 /* ==========================================================================
    Chef's Path — application logic
    Hash-based SPA router + progress tracking in localStorage.
-   Content lives in js/content.js (global CONTENT).
+   Content lives in js/content.js; UI strings in js/i18n.js; illustrations
+   in js/pics.js; timer/game/voice/assistant in their own modules.
    ========================================================================== */
 
 (function () {
@@ -14,7 +15,7 @@
 
   /* ------------------------------------------------------------------
      Progress storage
-     progress.lessons[id] = { quizPassed: bool, cooked: bool }
+     progress.lessons[id] = { quizPassed, cooked, steps: {idx:true} }
      ------------------------------------------------------------------ */
 
   let progress = loadProgress();
@@ -31,15 +32,15 @@
   function saveProgress() {
     try {
       localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
-    } catch (e) { /* storage unavailable (private mode etc.) — session-only */ }
+    } catch (e) { /* storage unavailable — session-only */ }
   }
 
   function lessonState(id) {
-    return progress.lessons[id] || { quizPassed: false, cooked: false };
+    return progress.lessons[id] || { quizPassed: false, cooked: false, steps: {} };
   }
 
   function setLessonState(id, patch) {
-    progress.lessons[id] = Object.assign({}, lessonState(id), patch);
+    progress.lessons[id] = Object.assign({ steps: {} }, lessonState(id), patch);
     saveProgress();
   }
 
@@ -100,7 +101,6 @@
     return n;
   }
 
-  /* "Today's practice" — the next actionable step, stable within a day. */
   function todaysPractice() {
     for (const level of CONTENT.levels) {
       if (!isLevelUnlocked(level) || !levelHasContent(level)) continue;
@@ -111,14 +111,13 @@
           lesson: lesson,
           level: level,
           action: s.quizPassed && !s.cooked
-            ? "You passed the quiz — now cook " + lesson.recipe.name + " to finish this lesson."
+            ? t("quiz_passed_cook") + " — " + lesson.recipe.name
             : (s.cooked && !s.quizPassed
-              ? "You've cooked the recipe — pass the quiz to finish this lesson."
-              : "Up next on your path. About " + lesson.minutes + " minutes.")
+              ? t("cooked_take_quiz")
+              : "~" + lesson.minutes + " " + t("min_short"))
         };
       }
     }
-    // Everything seeded is complete — suggest re-cooking a recipe, rotating daily.
     const cookable = [];
     for (const level of CONTENT.levels) {
       for (const lesson of level.lessons) {
@@ -128,12 +127,7 @@
     if (!cookable.length) return null;
     const dayIndex = Math.floor(Date.now() / 86400000) % cookable.length;
     const pick = cookable[dayIndex];
-    return {
-      lesson: pick.lesson,
-      level: pick.level,
-      action: "You've completed all available lessons — keep your skills sharp by cooking " + pick.lesson.recipe.name + " again today.",
-      revisit: true
-    };
+    return { lesson: pick.lesson, level: pick.level, action: pick.lesson.recipe.name, revisit: true };
   }
 
   /* ------------------------------------------------------------------
@@ -161,7 +155,6 @@
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
-  /* Format a scaled quantity as a friendly number/fraction (1.5 -> "1 ½"). */
   function formatQty(q) {
     if (q == null) return "";
     if (q <= 0) return "0";
@@ -176,10 +169,7 @@
       const d = Math.abs(frac - cand[0]);
       if (d < bestDiff) { bestDiff = d; best = cand; }
     }
-    // If no clean fraction is close, fall back to a decimal.
-    if (bestDiff > 0.04) {
-      return String(Math.round(q * 100) / 100);
-    }
+    if (bestDiff > 0.04) return String(Math.round(q * 100) / 100);
     let w = whole, f = best[1];
     if (best[0] === 1) { w += 1; f = ""; }
     if (w === 0) return f || "0";
@@ -197,8 +187,9 @@
     el.textContent = msg;
     el.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.classList.remove("show"); }, 3200);
+    toastTimer = setTimeout(function () { el.classList.remove("show"); }, 3500);
   }
+  window.appToast = toast; // used by the timer module
 
   /* ------------------------------------------------------------------
      Theme
@@ -226,6 +217,19 @@
   applyTheme(currentTheme());
 
   /* ------------------------------------------------------------------
+     Language / chrome
+     ------------------------------------------------------------------ */
+
+  function applyChrome() {
+    I18N.applyDir();
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      el.textContent = t(el.getAttribute("data-i18n"));
+    });
+    document.getElementById("footer-text").textContent = t("footer");
+    if (typeof Assistant !== "undefined") Assistant.refreshChrome();
+  }
+
+  /* ------------------------------------------------------------------
      Shared renderers
      ------------------------------------------------------------------ */
 
@@ -235,8 +239,12 @@
       '" style="width:' + pct + '%"></div></div>';
   }
 
-  /* Recipe block with servings scaling. `key` namespaces the DOM ids so
-     multiple recipes can live on one page (Recipes tab). */
+  function speakBtn(text) {
+    if (typeof Voice === "undefined" || !Voice.supported()) return "";
+    return '<div class="section-tools"><button type="button" class="speak-btn" data-speak="' +
+      esc(text) + '">' + t("read_aloud") + "</button></div>";
+  }
+
   function recipeHtml(recipe, key, opts) {
     opts = opts || {};
     const servings = opts.servings || recipe.servings;
@@ -253,24 +261,28 @@
 
     const steps = recipe.steps.map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("");
 
+    const speakText = recipe.name + ". Ingredients: " +
+      recipe.ingredients.map(function (i) {
+        return (i.qty != null ? formatQty(i.qty * factor) + " " + i.unit + " " : "") + i.item;
+      }).join(", ") + ". Method: " + recipe.steps.join(" ");
+
     return '' +
       '<div class="recipe-title-row">' +
         '<h3 style="font-size:1.15rem">' + esc(recipe.name) + '</h3>' +
         '<span class="chip">⏱ ' + esc(recipe.time) + '</span>' +
       '</div>' +
       '<p class="recipe-desc">' + esc(recipe.description) + '</p>' +
+      speakBtn(speakText) +
       '<div class="servings-ctl" data-recipe-key="' + esc(key) + '">' +
         '<button type="button" data-serv="-1" aria-label="Fewer servings">−</button>' +
-        '<span class="servings-num">' + servings + ' serving' + (servings === 1 ? "" : "s") + '</span>' +
+        '<span class="servings-num">' + servings + " " + (servings === 1 ? t("serving") : t("servings")) + '</span>' +
         '<button type="button" data-serv="1" aria-label="More servings">+</button>' +
       '</div>' +
       '<ul class="ingredients">' + ingRows + '</ul>' +
-      '<h4 style="margin-bottom:0.5rem">Method</h4>' +
+      '<h4 style="margin-bottom:0.5rem">' + t("method") + '</h4>' +
       '<ol class="recipe-steps">' + steps + '</ol>';
   }
 
-  /* Wire up +/- servings buttons inside `container`. `rerender(key, newServings)`
-     is called to refresh just that recipe's HTML. */
   function bindServingsControls(container, servingsMap, baseLookup, rerender) {
     container.querySelectorAll(".servings-ctl button").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -291,22 +303,20 @@
   function viewLearn() {
     let html = "";
 
-    // Today's practice hero
     const today = todaysPractice();
     if (today) {
       html +=
         '<section class="hero">' +
-          '<div class="eyebrow">🍅 Today\'s practice</div>' +
+          '<div class="eyebrow">🍅 ' + t("todays_practice") + '</div>' +
           '<h2>' + esc(today.revisit ? today.lesson.recipe.name : today.lesson.title) + '</h2>' +
           '<p>' + esc(today.action) + '</p>' +
           '<a class="btn btn-primary" href="#/lesson/' + today.lesson.id + '">' +
-            (today.revisit ? "Open the recipe" : "Continue learning") + '</a>' +
+            (today.revisit ? t("open_recipe") : t("continue_learning")) + '</a>' +
         '</section>';
     }
 
-    html += '<h1 class="page-title">Your path</h1>' +
-      '<p class="page-sub">Complete each lesson\'s quiz and cook its practice recipe. ' +
-      'Finish ' + Math.round(CONTENT.unlockRatio * 100) + '% of a level to unlock the next.</p>';
+    html += '<h1 class="page-title">' + t("your_path") + '</h1>' +
+      '<p class="page-sub">' + t("path_sub", { pct: Math.round(CONTENT.unlockRatio * 100) }) + '</p>';
 
     for (const level of CONTENT.levels) {
       const unlocked = isLevelUnlocked(level);
@@ -317,7 +327,7 @@
         '<div class="level-header">' +
           '<div class="level-icon">' + (unlocked ? level.icon : "🔒") + '</div>' +
           '<div class="level-title-wrap">' +
-            '<div class="level-num">Level ' + level.id + '</div>' +
+            '<div class="level-num">' + t("level") + " " + level.id + '</div>' +
             '<div class="level-title">' + esc(level.title) + '</div>' +
             '<div class="level-sub">' + esc(level.subtitle) + '</div>' +
             (unlocked && levelHasContent(level) ? progressBar(ratio) : "") +
@@ -325,9 +335,9 @@
           '<div class="level-meta">' +
             (unlocked
               ? (levelHasContent(level)
-                  ? doneCount + " / " + level.lessons.length + " lessons"
-                  : '<span class="lock-tag">Content coming soon</span>')
-              : '<span class="lock-tag">🔒 Finish Level ' + (level.id - 1) + ' to unlock</span>') +
+                  ? t("lessons_count", { done: doneCount, total: level.lessons.length })
+                  : '<span class="lock-tag">' + t("coming_soon") + '</span>')
+              : '<span class="lock-tag">' + t("locked_finish", { n: level.id - 1 }) + '</span>') +
           '</div>' +
         '</div>';
 
@@ -338,7 +348,7 @@
             html += '<div class="lesson-row stub">' +
               '<span class="lesson-status">•</span>' +
               '<span class="lesson-row-title">' + esc(lesson.title) + '</span>' +
-              '<span class="lesson-row-meta">Coming soon</span>' +
+              '<span class="lesson-row-meta">' + t("coming_soon") + '</span>' +
             '</div>';
             continue;
           }
@@ -347,9 +357,9 @@
           const partial = !complete && (s.quizPassed || s.cooked);
           const statusCls = complete ? "done" : (partial ? "partial" : "");
           const statusIcon = complete ? "✓" : (partial ? "…" : "");
-          const meta = complete ? "Completed" : (partial
-            ? (s.quizPassed ? "Quiz passed — cook the recipe" : "Cooked — take the quiz")
-            : "~" + lesson.minutes + " min");
+          const meta = complete ? t("completed") : (partial
+            ? (s.quizPassed ? t("quiz_passed_cook") : t("cooked_take_quiz"))
+            : "~" + lesson.minutes + " " + t("min_short"));
           html += '<a class="lesson-row" href="#/lesson/' + lesson.id + '">' +
             '<span class="lesson-status ' + statusCls + '">' + statusIcon + '</span>' +
             '<span class="lesson-row-title">' + esc(lesson.title) + '</span>' +
@@ -375,15 +385,14 @@
 
     if (!isLevelUnlocked(level)) {
       app.innerHTML =
-        '<div class="breadcrumb"><a href="#/learn">← Back to Learn</a></div>' +
+        '<div class="breadcrumb"><a href="#/learn">' + t("back_to_learn") + '</a></div>' +
         '<div class="card empty-state"><div class="big">🔒</div>' +
-        '<h2>This lesson is locked</h2>' +
-        '<p>Finish ' + Math.round(CONTENT.unlockRatio * 100) + '% of Level ' + (level.id - 1) +
-        ' to unlock Level ' + level.id + '.</p></div>';
+        '<h2>' + t("lesson_locked") + '</h2>' +
+        '<p>' + t("lesson_locked_body", { pct: Math.round(CONTENT.unlockRatio * 100), a: level.id - 1, b: level.id }) + '</p></div>';
       return;
     }
 
-    const state = { servings: {} }; // per-render servings for the recipe
+    const local = { servings: {} };
 
     function render() {
       const s = lessonState(lesson.id);
@@ -393,11 +402,18 @@
         return "<p>" + esc(p) + "</p>";
       }).join("");
 
-      const techSteps = lesson.technique.steps.map(function (st) {
-        return "<li>" + esc(st.text) +
+      const stepsState = s.steps || {};
+      const techSteps = lesson.technique.steps.map(function (st, i) {
+        const done = !!stepsState[i];
+        return '<li class="step-item' + (done ? " done-step" : "") + '">' +
+          '<button type="button" class="step-check' + (done ? " done" : "") + '" data-step="' + i +
+            '" aria-label="Mark step done">' + (done ? "✓" : (i + 1)) + "</button>" +
+          '<span class="step-text">' + esc(st.text) + "</span>" +
           (st.tip ? '<div class="tip"><strong>Tip:</strong> ' + esc(st.tip) + "</div>" : "") +
           "</li>";
       }).join("");
+
+      const allStepsDone = lesson.technique.steps.every(function (_, i) { return !!stepsState[i]; });
 
       const quizHtml = lesson.quiz.map(function (q, qi) {
         const opts = q.options.map(function (opt, oi) {
@@ -408,48 +424,61 @@
         return '<div class="quiz-q"><h3>' + (qi + 1) + ". " + esc(q.q) + "</h3>" + opts + "</div>";
       }).join("");
 
+      const introSpeak = lesson.title + ". " + lesson.intro;
+      const techSpeak = lesson.technique.heading + ". " +
+        lesson.technique.steps.map(function (st, i) {
+          return "Step " + (i + 1) + ": " + st.text + (st.tip ? " Tip: " + st.tip : "");
+        }).join(" ");
+
       app.innerHTML =
-        '<div class="breadcrumb"><a href="#/learn">← Back to Learn</a></div>' +
+        '<div class="breadcrumb"><a href="#/learn">' + t("back_to_learn") + '</a></div>' +
         '<div class="lesson-head">' +
-          '<span class="chip">Level ' + level.id + ' · ' + esc(level.title) + '</span>' +
-          '<span class="chip green">~' + lesson.minutes + ' min</span>' +
+          '<span class="chip">' + t("level") + " " + level.id + ' · ' + esc(level.title) + '</span>' +
+          '<span class="chip green">~' + lesson.minutes + ' ' + t("min_short") + '</span>' +
           '<h1>' + esc(lesson.title) + '</h1>' +
         '</div>' +
+        PICS.picSvg(lesson.id, "wide") +
 
-        (complete
-          ? '<div class="completion-banner">🎉 Lesson complete — quiz passed and recipe cooked. Nicely done!</div>'
-          : "") +
+        (complete ? '<div class="completion-banner">' + t("lesson_complete_banner") + '</div>' : "") +
 
-        '<section class="card section-card intro-text"><h2>📖 The idea</h2>' + introHtml + '</section>' +
+        '<section class="card section-card intro-text"><h2>📖 ' + t("the_idea") + '</h2>' +
+          speakBtn(introSpeak) + introHtml + '</section>' +
 
         '<section class="card section-card"><h2>🛠️ ' + esc(lesson.technique.heading) + '</h2>' +
-          '<ol class="tech-steps">' + techSteps + '</ol></section>' +
-
-        '<section class="card section-card recipe-card"><h2>🍽️ Practice recipe</h2>' +
-          '<div id="recipe-slot">' +
-            recipeHtml(lesson.recipe, lesson.id, { servings: state.servings[lesson.id] }) +
-          '</div>' +
-          '<div class="cooked-row">' +
-            (s.cooked
-              ? '<button class="btn btn-success" id="cooked-btn">✓ Cooked it! (tap to undo)</button>'
-              : '<button class="btn btn-outline" id="cooked-btn">I cooked this recipe</button>') +
-            '<span style="color:var(--text-soft);font-size:0.88rem">Cooking the recipe is half of completing the lesson.</span>' +
+          speakBtn(techSpeak) +
+          '<p style="color:var(--text-soft);font-size:0.85rem;margin-bottom:0.9rem">' + t("steps_done_hint") + '</p>' +
+          '<ol class="tech-steps">' + techSteps + '</ol>' +
+          '<div class="steps-footer">' +
+            '<button type="button" class="btn btn-outline" id="all-steps-btn"' + (allStepsDone ? " hidden" : "") + '>' + t("mark_all_done") + '</button>' +
+            '<span class="steps-done-msg" id="steps-done-msg"' + (allStepsDone ? "" : " hidden") + '>' + t("all_steps_done") + '</span>' +
           '</div>' +
         '</section>' +
 
-        '<section class="card section-card"><h2>❓ Quick quiz</h2>' +
+        '<section class="card section-card recipe-card"><h2>🍽️ ' + t("practice_recipe") + '</h2>' +
+          '<div id="recipe-slot">' +
+            recipeHtml(lesson.recipe, lesson.id, { servings: local.servings[lesson.id] }) +
+          '</div>' +
+          '<div class="cooked-row">' +
+            (s.cooked
+              ? '<button class="btn btn-success" id="cooked-btn">' + t("cooked_undo") + '</button>'
+              : '<button class="btn btn-outline" id="cooked-btn">' + t("mark_cooked") + '</button>') +
+            '<span style="color:var(--text-soft);font-size:0.88rem">' + t("cooked_half") + '</span>' +
+          '</div>' +
+        '</section>' +
+
+        '<section class="card section-card"><h2>❓ ' + t("quick_quiz") + '</h2>' +
           (s.quizPassed
-            ? '<div class="quiz-result pass">✓ Quiz passed! You can retake it below just for practice.</div><br>'
-            : '<p style="color:var(--text-soft);margin-bottom:1rem">Answer at least ' +
-              CONTENT.passThreshold + ' of ' + lesson.quiz.length + ' correctly to pass.</p>') +
+            ? '<div class="quiz-result pass">' + t("quiz_already_passed") + '</div><br>'
+            : '<p style="color:var(--text-soft);margin-bottom:1rem">' +
+              t("quiz_need", { n: CONTENT.passThreshold, m: lesson.quiz.length }) + '</p>') +
           '<form id="quiz-form">' + quizHtml +
-            '<button type="submit" class="btn btn-primary">Check answers</button>' +
+            '<button type="submit" class="btn btn-primary">' + t("check_answers") + '</button>' +
             '<div id="quiz-result-slot"></div>' +
           '</form>' +
         '</section>' +
 
         '<div class="lesson-nav-row">' +
-          '<a class="btn btn-ghost" href="#/learn">← All lessons</a>' +
+          '<a class="btn btn-ghost" href="#/learn">' + t("all_lessons") + '</a>' +
           (nextLessonLink(level, lesson) || "") +
         '</div>';
 
@@ -460,22 +489,57 @@
       const idx = level.lessons.indexOf(lesson);
       const next = level.lessons[idx + 1];
       if (next && !next.stub) {
-        return '<a class="btn btn-ghost" href="#/lesson/' + next.id + '">Next lesson →</a>';
+        return '<a class="btn btn-ghost" href="#/lesson/' + next.id + '">' + t("next_lesson") + '</a>';
       }
       return "";
     }
 
     function bindLessonEvents() {
-      // Servings scaling
-      bindServingsControls(app, state.servings,
-        function () { return lesson.recipe; },
-        function (key, servings) {
-          document.getElementById("recipe-slot").innerHTML =
-            recipeHtml(lesson.recipe, key, { servings: servings });
-          bindLessonEvents(); // recipe slot buttons were replaced
-        });
+      if (typeof Voice !== "undefined") Voice.bind(app);
 
-      // Cooked toggle
+      // step done buttons (update in place — no full re-render)
+      app.querySelectorAll(".step-check").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          const i = parseInt(btn.getAttribute("data-step"), 10);
+          const s = lessonState(lesson.id);
+          const steps = Object.assign({}, s.steps || {});
+          steps[i] = !steps[i];
+          setLessonState(lesson.id, { steps: steps });
+
+          const li = btn.closest(".step-item");
+          btn.classList.toggle("done", !!steps[i]);
+          btn.textContent = steps[i] ? "✓" : String(i + 1);
+          li.classList.toggle("done-step", !!steps[i]);
+
+          const allDone = lesson.technique.steps.every(function (_, k) { return !!steps[k]; });
+          document.getElementById("all-steps-btn").hidden = allDone;
+          document.getElementById("steps-done-msg").hidden = !allDone;
+          if (allDone) toast(t("all_steps_done"));
+        });
+      });
+
+      document.getElementById("all-steps-btn").addEventListener("click", function () {
+        const steps = {};
+        lesson.technique.steps.forEach(function (_, i) { steps[i] = true; });
+        setLessonState(lesson.id, { steps: steps });
+        render();
+        toast(t("all_steps_done"));
+      });
+
+      // servings scaling — rebind after each in-place re-render of the slot
+      function wireRecipeSlot() {
+        const slot = document.getElementById("recipe-slot");
+        if (typeof Voice !== "undefined") Voice.bind(slot);
+        bindServingsControls(slot, local.servings,
+          function () { return lesson.recipe; },
+          function (key, servings) {
+            slot.innerHTML = recipeHtml(lesson.recipe, key, { servings: servings });
+            wireRecipeSlot();
+          });
+      }
+      wireRecipeSlot();
+
+      // cooked toggle
       document.getElementById("cooked-btn").onclick = function () {
         const s = lessonState(lesson.id);
         const wasComplete = isLessonComplete(lesson.id);
@@ -484,30 +548,27 @@
         render();
       };
 
-      // Quiz selection highlighting
+      // quiz selection highlighting
       app.querySelectorAll(".quiz-opt input").forEach(function (input) {
         input.addEventListener("change", function () {
           const q = input.closest(".quiz-q");
-          q.querySelectorAll(".quiz-opt").forEach(function (o) {
-            o.classList.remove("selected");
-          });
+          q.querySelectorAll(".quiz-opt").forEach(function (o) { o.classList.remove("selected"); });
           input.closest(".quiz-opt").classList.add("selected");
         });
       });
 
-      // Quiz grading
+      // quiz grading
       document.getElementById("quiz-form").onsubmit = function (e) {
         e.preventDefault();
         const form = e.target;
         let answered = 0, correct = 0;
 
         lesson.quiz.forEach(function (q, qi) {
-          const picked = form.querySelector('input[name="q' + qi + '"]:checked');
-          if (picked) answered++;
+          if (form.querySelector('input[name="q' + qi + '"]:checked')) answered++;
         });
         if (answered < lesson.quiz.length) {
           document.getElementById("quiz-result-slot").innerHTML =
-            '<div class="quiz-result fail">Answer all ' + lesson.quiz.length + ' questions first.</div>';
+            '<div class="quiz-result fail">' + t("quiz_answer_all", { n: lesson.quiz.length }) + '</div>';
           return;
         }
 
@@ -526,33 +587,32 @@
         const passed = correct >= CONTENT.passThreshold;
         const slot = document.getElementById("quiz-result-slot");
         if (passed) {
-          slot.innerHTML = '<div class="quiz-result pass">✓ ' + correct + " / " +
-            lesson.quiz.length + " correct — quiz passed!</div>";
+          slot.innerHTML = '<div class="quiz-result pass">' +
+            t("quiz_passed_result", { c: correct, m: lesson.quiz.length }) + '</div>';
           const wasComplete = isLessonComplete(lesson.id);
           const alreadyPassed = lessonState(lesson.id).quizPassed;
           setLessonState(lesson.id, { quizPassed: true });
           if (!alreadyPassed) afterProgressChange(wasComplete);
-          // Re-render shortly so banners/status update, keeping the result visible first.
-          setTimeout(render, 1600);
+          setTimeout(function () {
+            // only refresh if the user is still on this lesson
+            if (location.hash === "#/lesson/" + lesson.id) render();
+          }, 1600);
         } else {
-          slot.innerHTML = '<div class="quiz-result fail">' + correct + " / " +
-            lesson.quiz.length + " correct — you need " + CONTENT.passThreshold +
-            ". Review the answers above and try again.</div>";
+          slot.innerHTML = '<div class="quiz-result fail">' +
+            t("quiz_failed_result", { c: correct, m: lesson.quiz.length, n: CONTENT.passThreshold }) + '</div>';
         }
       };
     }
 
-    /* Toast on completion / level unlock. Called BEFORE render() so it can
-       compare old vs new state. `wasComplete` is the pre-change value. */
     function afterProgressChange(wasComplete) {
       const nowComplete = isLessonComplete(lesson.id);
       if (!wasComplete && nowComplete) {
         const nextLevel = getLevel(level.id + 1);
         if (nextLevel && isLevelUnlocked(nextLevel) && !wasLevelUnlockToastShown(nextLevel.id)) {
-          toast("🔓 Level " + nextLevel.id + " unlocked: " + nextLevel.title + "!");
+          toast("🔓 " + t("level") + " " + nextLevel.id + ": " + nextLevel.title + "!");
           markLevelUnlockToastShown(nextLevel.id);
         } else {
-          toast("🎉 Lesson complete: " + lesson.title);
+          toast("🎉 " + lesson.title);
         }
       }
     }
@@ -579,12 +639,12 @@
     const done = completedLessonCount();
     const overallPct = totalLessons ? Math.round((done / totalLessons) * 100) : 0;
 
-    let html = '<h1 class="page-title">Your progress</h1>' +
-      '<p class="page-sub">Every quiz passed and recipe cooked moves you down the path.</p>';
+    let html = '<h1 class="page-title">' + t("your_progress") + '</h1>' +
+      '<p class="page-sub">' + t("progress_sub") + '</p>';
 
     html += '<div class="card overall-card">' +
       '<div class="overall-num">' + overallPct + '%</div>' +
-      '<div>of available lessons complete — ' + done + " of " + totalLessons + '</div>' +
+      '<div>' + t("of_lessons", { done: done, total: totalLessons }) + '</div>' +
       progressBar(totalLessons ? done / totalLessons : 0) +
       '</div>';
 
@@ -597,18 +657,18 @@
       html += '<div class="card progress-row' + (unlocked ? "" : " locked") + '">' +
         '<div class="level-icon">' + (unlocked ? level.icon : "🔒") + '</div>' +
         '<div class="progress-row-body">' +
-          '<div class="progress-row-title">Level ' + level.id + ": " + esc(level.title) + '</div>' +
+          '<div class="progress-row-title">' + t("level") + " " + level.id + ": " + esc(level.title) + '</div>' +
           (unlocked
             ? (hasContent ? progressBar(ratio)
-               : '<span class="level-sub">Content coming soon</span>')
-            : '<span class="level-sub">Locked — finish Level ' + (level.id - 1) + ' first</span>') +
+               : '<span class="level-sub">' + t("coming_soon") + '</span>')
+            : '<span class="level-sub">' + t("locked_word", { n: level.id - 1 }) + '</span>') +
         '</div>' +
         '<div class="progress-row-pct">' + (unlocked && hasContent ? pct + "%" : "—") + '</div>' +
       '</div>';
     }
     html += '</div>';
 
-    html += '<h2 style="font-size:1.4rem;margin-bottom:0.9rem">Badges</h2><div class="badges-grid">';
+    html += '<h2 style="font-size:1.4rem;margin-bottom:0.9rem">' + t("badges") + '</h2><div class="badges-grid">';
     for (const b of BADGES) {
       const earned = b.earned();
       html += '<div class="card badge-card ' + (earned ? "earned" : "locked") + '">' +
@@ -627,7 +687,6 @@
      ------------------------------------------------------------------ */
 
   function viewRecipes() {
-    // A recipe is "learned" once its lesson has any progress (quiz or cooked).
     const learned = [];
     for (const level of CONTENT.levels) {
       for (const lesson of level.lessons) {
@@ -637,16 +696,15 @@
       }
     }
 
-    let html = '<h1 class="page-title">Your recipe box</h1>' +
-      '<p class="page-sub">Every practice recipe you\'ve learned, ready to cook again. ' +
-      'Tap a recipe to open it and scale the servings.</p>';
+    let html = '<h1 class="page-title">' + t("recipe_box") + '</h1>' +
+      '<p class="page-sub">' + t("recipes_sub") + '</p>';
 
     if (!learned.length) {
       html += '<div class="card empty-state">' +
         '<div class="big">🍲</div>' +
-        '<h2>No recipes yet</h2>' +
-        '<p>Start a lesson and cook its practice recipe (or pass its quiz) and it will appear here.</p>' +
-        '<br><a class="btn btn-primary" href="#/learn">Go to your first lesson</a>' +
+        '<h2>' + t("no_recipes_title") + '</h2>' +
+        '<p>' + t("no_recipes_body") + '</p>' +
+        '<br><a class="btn btn-primary" href="#/learn">' + t("go_first_lesson") + '</a>' +
       '</div>';
       app.innerHTML = html;
       return;
@@ -660,10 +718,10 @@
       const r = item.lesson.recipe;
       html += '<div class="card recipe-tile" data-lesson="' + item.lesson.id + '">' +
         '<button type="button" class="recipe-tile-head">' +
-          '<div class="level-icon">' + item.level.icon + '</div>' +
+          PICS.picSvg(item.lesson.id, "thumb") +
           '<div style="flex:1;min-width:0">' +
             '<div class="recipe-tile-title">' + esc(r.name) + '</div>' +
-            '<div class="recipe-tile-sub">Level ' + item.level.id + " · " + esc(item.lesson.title) +
+            '<div class="recipe-tile-sub">' + t("level") + " " + item.level.id + " · " + esc(item.lesson.title) +
               " · ⏱ " + esc(r.time) + '</div>' +
           '</div>' +
           '<span class="recipe-tile-chevron">▾</span>' +
@@ -678,7 +736,8 @@
       const found = findLesson(lessonId);
       const body = tile.querySelector(".recipe-tile-body");
       body.innerHTML = recipeHtml(found.lesson.recipe, lessonId, { servings: servingsMap[lessonId] }) +
-        '<br><a class="btn btn-ghost" href="#/lesson/' + lessonId + '">Open full lesson →</a>';
+        '<br><a class="btn btn-ghost" href="#/lesson/' + lessonId + '">' + t("open_full_lesson") + '</a>';
+      if (typeof Voice !== "undefined") Voice.bind(body);
       bindServingsControls(body, servingsMap,
         function (key) { return findLesson(key).lesson.recipe; },
         function (key) { renderTileBody(tile, key); });
@@ -700,33 +759,204 @@
   }
 
   /* ------------------------------------------------------------------
+     View: Timer (+ game)
+     ------------------------------------------------------------------ */
+
+  const PRESETS = [5, 10, 15, 20, 25, 30, 45, 60];
+
+  function viewTimer() {
+    let html = '<h1 class="page-title">⏱ ' + t("timer_title") + '</h1>' +
+      '<p class="page-sub">' + t("timer_sub") + '</p>';
+
+    html += '<div class="card section-card" id="timer-card">' + timerCardHtml() + '</div>';
+
+    html += '<div class="card section-card">' +
+      '<h2>🎮 ' + t("play_while_wait") + '</h2>' +
+      '<p style="color:var(--text-soft);font-size:0.88rem;margin-bottom:0.8rem">' + t("game_help") + '</p>' +
+      '<div class="game-hud">' +
+        '<span>' + t("game_score") + ': <span id="game-score">0</span></span>' +
+        '<span class="lives" id="game-lives">❤️❤️❤️</span>' +
+        '<span>' + t("game_best") + ': <span id="game-best">' + Game.best() + '</span></span>' +
+      '</div>' +
+      '<canvas id="game-canvas" class="game-canvas"></canvas>' +
+      '<div class="game-overlay" id="game-overlay">' +
+        '<button class="btn btn-primary" id="game-start-btn">' + t("game_start") + '</button>' +
+      '</div>' +
+    '</div>';
+
+    app.innerHTML = html;
+    bindTimerCard();
+
+    // mount the game
+    const canvas = document.getElementById("game-canvas");
+    Game.mount(canvas, function (st) {
+      const scoreEl = document.getElementById("game-score");
+      if (!scoreEl) return;
+      scoreEl.textContent = st.score;
+      document.getElementById("game-best").textContent = st.best;
+      document.getElementById("game-lives").textContent = "❤️".repeat(Math.max(0, st.lives));
+      const overlay = document.getElementById("game-overlay");
+      if (st.over) {
+        overlay.innerHTML = '<p style="font-weight:700;margin-bottom:0.5rem">' + t("game_over") +
+          " " + t("game_score") + ": " + st.score + '</p>' +
+          '<button class="btn btn-primary" id="game-start-btn">' + t("game_again") + '</button>';
+        bindGameStart();
+      }
+    });
+    bindGameStart();
+  }
+
+  function bindGameStart() {
+    const btn = document.getElementById("game-start-btn");
+    if (btn) btn.addEventListener("click", function () {
+      document.getElementById("game-overlay").innerHTML = "";
+      Game.start();
+    });
+  }
+
+  function timerCardHtml() {
+    if (Timer.active() || Timer.finished()) {
+      const fin = Timer.finished();
+      const pills = Timer.MILESTONES.filter(function (m) { return Timer.duration() > m; })
+        .map(function (m) {
+          const fired = Timer.remainingMs() <= m * 60000;
+          return '<span class="milestone-pill' + (fired ? " fired" : "") + '">' + m + "'</span>";
+        }).join("");
+      return '<div style="text-align:center;color:var(--text-soft)">' +
+          (fin ? "" : t("timer_running_for") + " · " + Timer.duration() + " " + t("minutes")) + '</div>' +
+        '<div class="timer-display' + (fin ? " finished" : "") + '" id="timer-display">' +
+          (fin ? t("time_up") : Timer.remainingText()) + '</div>' +
+        (fin ? "" : '<div class="timer-milestones">' + pills + "</div>") +
+        '<div style="text-align:center;margin-top:1.2rem">' +
+          '<button class="btn btn-danger" id="timer-cancel-btn">' + t("cancel_timer") + '</button></div>';
+    }
+    return '<div class="timer-presets">' +
+        PRESETS.map(function (m) {
+          return '<button class="preset-btn" data-mins="' + m + '">' + m + "'</button>";
+        }).join("") + '</div>' +
+      '<div class="timer-custom-row">' +
+        '<input type="number" id="timer-custom" min="1" max="240" placeholder="' + t("timer_custom") + '"> ' +
+        '<span style="color:var(--text-soft)">' + t("minutes") + '</span>' +
+        '<button class="btn btn-primary" id="timer-start-btn">' + t("start_timer") + '</button>' +
+      '</div>' +
+      ('Notification' in window && Notification.permission !== "granted"
+        ? '<p class="notif-hint">🔔 ' + t("notif_hint") + '</p>' : "");
+  }
+
+  function bindTimerCard() {
+    const card = document.getElementById("timer-card");
+    if (!card) return;
+    card.querySelectorAll(".preset-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        Timer.start(parseInt(btn.getAttribute("data-mins"), 10));
+        card.innerHTML = timerCardHtml();
+        bindTimerCard();
+      });
+    });
+    const startBtn = document.getElementById("timer-start-btn");
+    if (startBtn) startBtn.addEventListener("click", function () {
+      const v = parseInt(document.getElementById("timer-custom").value, 10);
+      if (v > 0) {
+        Timer.start(v);
+        card.innerHTML = timerCardHtml();
+        bindTimerCard();
+      }
+    });
+    const cancelBtn = document.getElementById("timer-cancel-btn");
+    if (cancelBtn) cancelBtn.addEventListener("click", function () {
+      Timer.cancel();
+      card.innerHTML = timerCardHtml();
+      bindTimerCard();
+    });
+  }
+
+  /* live updates: header chip everywhere + display on the timer page */
+  Timer.onChange(function () {
+    const chip = document.getElementById("timer-chip");
+    if (Timer.active() || Timer.finished()) {
+      chip.hidden = false;
+      chip.classList.toggle("finished", Timer.finished());
+      document.getElementById("timer-chip-time").textContent =
+        Timer.finished() ? "0:00" : Timer.remainingText();
+    } else {
+      chip.hidden = true;
+    }
+
+    const disp = document.getElementById("timer-display");
+    if (disp && Timer.active() && !Timer.finished()) {
+      disp.textContent = Timer.remainingText();
+      // refresh milestone pills
+      const card = document.getElementById("timer-card");
+      const pills = card.querySelectorAll(".milestone-pill");
+      const shown = Timer.MILESTONES.filter(function (m) { return Timer.duration() > m; });
+      pills.forEach(function (p, i) {
+        if (shown[i] != null) p.classList.toggle("fired", Timer.remainingMs() <= shown[i] * 60000);
+      });
+    } else if (disp && Timer.finished() && !disp.classList.contains("finished")) {
+      const card = document.getElementById("timer-card");
+      card.innerHTML = timerCardHtml();
+      bindTimerCard();
+    } else if (disp && !Timer.active() && !Timer.finished()) {
+      const card = document.getElementById("timer-card");
+      if (card.querySelector(".timer-display")) {
+        card.innerHTML = timerCardHtml();
+        bindTimerCard();
+      }
+    }
+  });
+
+  /* ------------------------------------------------------------------
      View: Settings
      ------------------------------------------------------------------ */
 
   function viewSettings() {
+    const langOptions = I18N.LANGS.map(function (l) {
+      return '<option value="' + l.code + '"' + (I18N.getLang() === l.code ? " selected" : "") + '>' +
+        l.name + "</option>";
+    }).join("");
+
+    const hasKey = !!Assistant.apiKey();
+
     app.innerHTML =
-      '<h1 class="page-title">Settings</h1>' +
-      '<p class="page-sub">Everything is stored locally in your browser — nothing leaves this device.</p>' +
+      '<h1 class="page-title">' + t("settings") + '</h1>' +
+      '<p class="page-sub">' + t("settings_sub") + '</p>' +
 
       '<div class="card settings-row">' +
         '<div class="settings-row-body">' +
-          '<h3>Theme</h3>' +
-          '<p>Switch between the warm light theme and the cozy dark theme.</p>' +
+          '<h3>' + t("theme") + '</h3><p>' + t("theme_desc") + '</p>' +
         '</div>' +
         '<button class="btn btn-ghost" id="settings-theme-btn"></button>' +
       '</div>' +
 
       '<div class="card settings-row">' +
         '<div class="settings-row-body">' +
-          '<h3>Reset progress</h3>' +
-          '<p>Erases all lesson completion, quiz results, and badges. This cannot be undone.</p>' +
+          '<h3>🌍 ' + t("language") + '</h3><p>' + t("language_desc") + '</p>' +
         '</div>' +
-        '<button class="btn btn-danger" id="reset-btn">Reset all progress</button>' +
+        '<select class="settings-select" id="lang-select">' + langOptions + '</select>' +
+      '</div>' +
+
+      '<div class="card settings-row">' +
+        '<div class="settings-row-body">' +
+          '<h3>🤖 ' + t("ai_key_title") + '</h3><p>' + t("ai_key_desc") + '</p>' +
+          '<div class="settings-inline" style="margin-top:0.6rem">' +
+            '<input type="password" class="settings-input" id="api-key-input" placeholder="sk-..." value="' +
+              (hasKey ? esc(Assistant.apiKey()) : "") + '">' +
+            '<button class="btn btn-primary" id="api-key-save">' + t("save") + '</button>' +
+            (hasKey ? '<button class="btn btn-ghost" id="api-key-remove">' + t("remove") + '</button>' : "") +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="card settings-row">' +
+        '<div class="settings-row-body">' +
+          '<h3>' + t("reset_title") + '</h3><p>' + t("reset_desc") + '</p>' +
+        '</div>' +
+        '<button class="btn btn-danger" id="reset-btn">' + t("reset_btn") + '</button>' +
       '</div>';
 
     const themeBtn = document.getElementById("settings-theme-btn");
     function refreshThemeBtn() {
-      themeBtn.textContent = currentTheme() === "dark" ? "☀️ Switch to light" : "🌙 Switch to dark";
+      themeBtn.textContent = currentTheme() === "dark" ? t("switch_light") : t("switch_dark");
     }
     refreshThemeBtn();
     themeBtn.addEventListener("click", function () {
@@ -736,11 +966,30 @@
       refreshThemeBtn();
     });
 
+    document.getElementById("lang-select").addEventListener("change", function (e) {
+      I18N.setLang(e.target.value);
+      applyChrome();
+      viewSettings();
+    });
+
+    document.getElementById("api-key-save").addEventListener("click", function () {
+      const v = document.getElementById("api-key-input").value.trim();
+      Assistant.setApiKey(v);
+      toast(t("saved"));
+      viewSettings();
+    });
+    const removeBtn = document.getElementById("api-key-remove");
+    if (removeBtn) removeBtn.addEventListener("click", function () {
+      Assistant.setApiKey("");
+      toast(t("key_removed"));
+      viewSettings();
+    });
+
     document.getElementById("reset-btn").addEventListener("click", function () {
-      if (confirm("Reset ALL progress? Every completed lesson, quiz, and badge will be erased.")) {
+      if (confirm(t("reset_confirm"))) {
         progress = { lessons: {} };
         saveProgress();
-        toast("Progress reset. Fresh apron, fresh start!");
+        toast(t("reset_done"));
         viewSettings();
       }
     });
@@ -752,9 +1001,9 @@
 
   function viewNotFound() {
     app.innerHTML = '<div class="card empty-state">' +
-      '<div class="big">🍳</div><h2>Page not found</h2>' +
-      '<p>That page seems to have burned. Head back to the course.</p>' +
-      '<br><a class="btn btn-primary" href="#/learn">Back to Learn</a></div>';
+      '<div class="big">🍳</div><h2>' + t("page_not_found") + '</h2>' +
+      '<p>' + t("page_not_found_body") + '</p>' +
+      '<br><a class="btn btn-primary" href="#/learn">' + t("back_to_learn") + '</a></div>';
   }
 
   /* ------------------------------------------------------------------
@@ -772,35 +1021,26 @@
     const parts = hash.replace(/^#\//, "").split("/");
     const page = parts[0] || "learn";
 
+    // leaving a page: stop any reading voice and the game loop
+    if (typeof Voice !== "undefined") Voice.stop();
+    if (page !== "timer") Game.stop();
+
     window.scrollTo(0, 0);
 
     switch (page) {
-      case "learn":
-        setActiveNav("learn");
-        viewLearn();
-        break;
-      case "lesson":
-        setActiveNav("learn");
-        viewLesson(parts[1]);
-        break;
-      case "progress":
-        setActiveNav("progress");
-        viewProgress();
-        break;
-      case "recipes":
-        setActiveNav("recipes");
-        viewRecipes();
-        break;
-      case "settings":
-        setActiveNav("settings");
-        viewSettings();
-        break;
-      default:
-        setActiveNav("");
-        viewNotFound();
+      case "learn": setActiveNav("learn"); viewLearn(); break;
+      case "lesson": setActiveNav("learn"); viewLesson(parts[1]); break;
+      case "progress": setActiveNav("progress"); viewProgress(); break;
+      case "recipes": setActiveNav("recipes"); viewRecipes(); break;
+      case "timer": setActiveNav("timer"); viewTimer(); break;
+      case "settings": setActiveNav("settings"); viewSettings(); break;
+      default: setActiveNav(""); viewNotFound();
     }
   }
 
   window.addEventListener("hashchange", route);
+
+  Assistant.inject();
+  applyChrome();
   route();
 })();

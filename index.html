@@ -15,11 +15,13 @@
         <span class="brand-name">Chef's Path</span>
       </a>
       <nav class="main-nav" aria-label="Main navigation">
-        <a href="#/learn" data-nav="learn">Learn</a>
-        <a href="#/progress" data-nav="progress">Progress</a>
-        <a href="#/recipes" data-nav="recipes">Recipes</a>
+        <a href="#/learn" data-nav="learn" data-i18n="nav_learn">Learn</a>
+        <a href="#/progress" data-nav="progress" data-i18n="nav_progress">Progress</a>
+        <a href="#/recipes" data-nav="recipes" data-i18n="nav_recipes">Recipes</a>
+        <a href="#/timer" data-nav="timer" data-i18n="nav_timer">Timer</a>
       </nav>
       <div class="header-actions">
+        <a href="#/timer" id="timer-chip" class="timer-chip" hidden>⏱ <span id="timer-chip-time"></span></a>
         <button id="theme-toggle" class="icon-btn" title="Toggle dark / light theme" aria-label="Toggle theme">🌙</button>
         <a href="#/settings" class="icon-btn" data-nav="settings" title="Settings" aria-label="Settings">⚙️</a>
       </div>
@@ -37,10 +39,16 @@
   </main>
 
   <footer class="site-footer">
-    <p>Chef's Path — from first chop to full menu. Your progress is saved on this device.</p>
+    <p id="footer-text">Chef's Path — from first chop to full menu. Your progress is saved on this device.</p>
   </footer>
 
+  <script src="js/i18n.js"></script>
+  <script src="js/pics.js"></script>
   <script src="js/content.js"></script>
+  <script src="js/voice.js"></script>
+  <script src="js/timer.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/assistant.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
