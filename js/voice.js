@@ -23,6 +23,38 @@ const Voice = (function () {
     loadVoices();
     // getVoices() is often empty until this fires (especially Edge online voices)
     window.speechSynthesis.onvoiceschanged = loadVoices;
+    // Edge's online "natural" voices can appear a beat late — poll briefly at
+    // startup so they're ready by the time the user taps Read aloud.
+    let tries = 0;
+    const warm = setInterval(function () {
+      loadVoices();
+      if (voices.length > 1 || ++tries > 10) clearInterval(warm);
+    }, 400);
+  }
+
+  /* Resolve the best voice for `locale`, calling cb(voice|null). If the voice
+     isn't present yet, wait up to ~2.5s for a voiceschanged event before
+     giving up — Edge loads its local (English) voices first and its online
+     natural voices (Urdu/Hindi/Arabic) a beat later, so a voice we "don't
+     have" may simply not have loaded yet. */
+  function resolveVoice(locale, cb) {
+    loadVoices();
+    let v = findVoice(locale);
+    if (v) { cb(v); return; }
+    let settled = false;
+    function retry() {
+      if (settled) return;
+      settled = true;
+      loadVoices();
+      cb(findVoice(locale));
+    }
+    const prev = window.speechSynthesis.onvoiceschanged;
+    window.speechSynthesis.onvoiceschanged = function () {
+      loadVoices();
+      if (typeof prev === "function") try { prev(); } catch (e) {}
+      if (findVoice(locale)) retry();
+    };
+    setTimeout(retry, 2500);
   }
 
   const SPEECH_LOCALE = {
@@ -55,13 +87,25 @@ const Voice = (function () {
   function speak(text, btn) {
     stop();
     if (!text) return;
+    if (!synthSupported()) {
+      if (window.appToast) window.appToast(t("voice_unavailable"));
+      return;
+    }
     const locale = speechLocale();
-    const voice = synthSupported() ? findVoice(locale) : null;
+    activeBtn = btn || null;
+    setBtn(btn, "voice_loading"); // shows "Loading voice…" while we wait
 
-    if (voice) {
-      // Native engine — free & offline, with the RIGHT voice selected.
+    resolveVoice(locale, function (voice) {
+      if (activeBtn !== btn) return; // user pressed stop meanwhile
+      if (!voice) {
+        // Genuinely no installed voice for this language — explain, don't fail silently.
+        setBtn(btn, "read_aloud");
+        activeBtn = null;
+        if (window.appToast) window.appToast(t("voice_unavailable"));
+        return;
+      }
       const u = new SpeechSynthesisUtterance(text);
-      u.voice = voice;
+      u.voice = voice;      // explicit voice — the key to non-English speech
       u.lang = voice.lang;
       u.rate = 0.95;
       u.onend = function () {
@@ -70,14 +114,9 @@ const Voice = (function () {
       u.onerror = function () {
         if (activeBtn === btn) { setBtn(btn, "read_aloud"); activeBtn = null; }
       };
-      activeBtn = btn || null;
       setBtn(btn, "stop_reading");
       window.speechSynthesis.speak(u);
-      return;
-    }
-
-    // No installed voice for this language — explain instead of failing silently.
-    if (window.appToast) window.appToast(t("voice_unavailable"));
+    });
   }
 
   /* Short spoken alert for the kitchen timer (English, uses native engine). */
