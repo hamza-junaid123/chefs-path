@@ -85,11 +85,41 @@ const Game = (function () {
     osc.start(t0); osc.stop(t0 + 0.32);
   }
 
+  /* Game over = a sobbing "waaah… waaah… waaah" — three descending wails, each
+     with a rise-then-fall pitch contour and a vibrato wobble for the cry. */
   function sfxGameOver() {
     const ac = ensureAudio(); if (!ac) return;
     const t0 = ac.currentTime;
-    // descending "wah-wah-wah"
-    [523, 415, 349, 262].forEach(function (f, i) { tone(f, t0 + i * 0.16, 0.18, "square", 0.22); });
+    const sobs = [
+      { f: 520, at: 0.00, dur: 0.55 },
+      { f: 430, at: 0.60, dur: 0.55 },
+      { f: 340, at: 1.20, dur: 0.75 }
+    ];
+    sobs.forEach(function (s) {
+      const start = t0 + s.at;
+      const osc = ac.createOscillator();
+      const g = ac.createGain();
+      // vibrato: an LFO wobbling the pitch gives the wavering "crying" quality
+      const lfo = ac.createOscillator();
+      const lfoGain = ac.createGain();
+      lfo.frequency.value = 11;   // wobble speed
+      lfoGain.gain.value = 18;    // wobble depth (Hz)
+      lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(s.f, start);
+      osc.frequency.linearRampToValueAtTime(s.f * 1.25, start + s.dur * 0.3); // wail up
+      osc.frequency.exponentialRampToValueAtTime(s.f * 0.55, start + s.dur);  // droop down
+      osc.connect(g); g.connect(ac.destination);
+
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.exponentialRampToValueAtTime(0.26, start + 0.08);
+      g.gain.exponentialRampToValueAtTime(0.11, start + s.dur * 0.55);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + s.dur);
+
+      osc.start(start); osc.stop(start + s.dur + 0.05);
+      lfo.start(start); lfo.stop(start + s.dur + 0.05);
+    });
   }
 
   function best() { return parseInt(localStorage.getItem(BEST_KEY) || "0", 10); }
