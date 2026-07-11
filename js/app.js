@@ -988,6 +988,46 @@
      View: Settings
      ------------------------------------------------------------------ */
 
+  const VOICE_SAMPLES = {
+    en: "This is the English voice.",
+    ur: "یہ اردو کی آواز ہے۔",
+    ar: "هذا هو الصوت العربي.",
+    hi: "यह हिंदी की आवाज़ है।",
+    es: "Esta es la voz en español.",
+    fr: "Ceci est la voix française."
+  };
+
+  function voiceDiagRows() {
+    if (typeof Voice === "undefined" || !Voice.supported()) return "";
+    return I18N.LANGS.map(function (l) {
+      const v = Voice.matchLang(l.code);
+      const ok = !!v;
+      return '<div class="voice-diag-row" data-code="' + l.code + '">' +
+        '<span class="voice-diag-name">' + esc(l.name) + '</span>' +
+        '<span class="voice-diag-status ' + (ok ? "ok" : "no") + '">' +
+          (ok ? t("voice_ready") : t("voice_none")) + '</span>' +
+        '<button class="btn btn-ghost voice-diag-test" data-code="' + l.code + '"' +
+          (ok ? "" : " disabled") + '>' + t("voice_test") + '</button>' +
+      '</div>';
+    }).join("");
+  }
+
+  function refreshVoiceDiag() {
+    const box = document.getElementById("voice-diag");
+    if (!box) return;
+    box.innerHTML = voiceDiagRows();
+    bindVoiceDiag();
+  }
+
+  function bindVoiceDiag() {
+    document.querySelectorAll(".voice-diag-test").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const code = btn.getAttribute("data-code");
+        Voice.speak(VOICE_SAMPLES[code] || "Hello", btn, Voice.localeOf(code));
+      });
+    });
+  }
+
   function viewSettings() {
     const langOptions = I18N.LANGS.map(function (l) {
       return '<option value="' + l.code + '"' + (I18N.getLang() === l.code ? " selected" : "") + '>' +
@@ -1010,6 +1050,13 @@
           '<h3>🌍 ' + t("language") + '</h3><p>' + t("language_desc") + '</p>' +
         '</div>' +
         '<select class="settings-select" id="lang-select">' + langOptions + '</select>' +
+      '</div>' +
+
+      '<div class="card settings-row" style="display:block">' +
+        '<div class="settings-row-body" style="min-width:0">' +
+          '<h3>' + t("voice_section") + '</h3><p>' + t("voice_section_desc") + '</p>' +
+          '<div id="voice-diag" style="margin-top:0.8rem">' + voiceDiagRows() + '</div>' +
+        '</div>' +
       '</div>' +
 
       '<div class="card settings-row">' +
@@ -1045,7 +1092,12 @@
         viewSettings();
       }
     });
+
+    bindVoiceDiag();
   }
+
+  // Update the Settings voice diagnostic if voices arrive after the page loads.
+  if (typeof Voice !== "undefined") Voice.onVoices(refreshVoiceDiag);
 
   /* ------------------------------------------------------------------
      View: not found

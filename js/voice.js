@@ -1,15 +1,24 @@
 /* ==========================================================================
    Chef's Path — voice (read-aloud) via the browser's Speech Synthesis API.
-   Free, offline, no key. Used when the device has a voice installed for the
-   selected language. We select the matching voice EXPLICITLY: setting only
-   utterance.lang leaves Chromium/Edge on the English voice for languages like
-   Urdu/Arabic/Hindi (the bug this addresses). If the device has no voice for
-   the language, the user gets a clear, translated message instead of silence.
+   Free, offline, no key. Speaks the selected language using a voice installed
+   on the device.
+
+   Robustness handled here:
+   - Explicit voice selection (setting only utterance.lang leaves Chromium/Edge
+     on the English voice for Urdu/Arabic/Hindi — nothing is heard).
+   - Patience for late-loading voices (Edge's online natural voices arrive a
+     beat after the local English ones).
+   - Long-text chunking + a pause/resume keepalive to defeat the well-known
+     Chromium bug where speech stops after ~15 seconds.
+   - A clear, translated message when the device truly has no voice for the
+     language, plus a per-language diagnostic surfaced in Settings.
    ========================================================================== */
 
 const Voice = (function () {
   let activeBtn = null;
   let voices = [];
+  let keepAlive = null;
+  const voiceListeners = [];
 
   function synthSupported() {
     return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
@@ -18,44 +27,24 @@ const Voice = (function () {
 
   function loadVoices() {
     if (synthSupported()) voices = window.speechSynthesis.getVoices() || [];
+    return voices;
   }
+
   if (synthSupported()) {
     loadVoices();
-    // getVoices() is often empty until this fires (especially Edge online voices)
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-    // Edge's online "natural" voices can appear a beat late — poll briefly at
-    // startup so they're ready by the time the user taps Read aloud.
+    window.speechSynthesis.onvoiceschanged = function () {
+      loadVoices();
+      voiceListeners.forEach(function (cb) { try { cb(); } catch (e) {} });
+    };
+    // Edge online voices can appear a beat late — poll briefly at startup.
     let tries = 0;
     const warm = setInterval(function () {
       loadVoices();
-      if (voices.length > 1 || ++tries > 10) clearInterval(warm);
+      if (voices.length > 1 || ++tries > 12) clearInterval(warm);
     }, 400);
   }
 
-  /* Resolve the best voice for `locale`, calling cb(voice|null). If the voice
-     isn't present yet, wait up to ~2.5s for a voiceschanged event before
-     giving up — Edge loads its local (English) voices first and its online
-     natural voices (Urdu/Hindi/Arabic) a beat later, so a voice we "don't
-     have" may simply not have loaded yet. */
-  function resolveVoice(locale, cb) {
-    loadVoices();
-    let v = findVoice(locale);
-    if (v) { cb(v); return; }
-    let settled = false;
-    function retry() {
-      if (settled) return;
-      settled = true;
-      loadVoices();
-      cb(findVoice(locale));
-    }
-    const prev = window.speechSynthesis.onvoiceschanged;
-    window.speechSynthesis.onvoiceschanged = function () {
-      loadVoices();
-      if (typeof prev === "function") try { prev(); } catch (e) {}
-      if (findVoice(locale)) retry();
-    };
-    setTimeout(retry, 2500);
-  }
+  function onVoices(cb) { voiceListeners.push(cb); }
 
   const SPEECH_LOCALE = {
     en: "en-US", ur: "ur-PK", ar: "ar-SA", hi: "hi-IN", es: "es-ES", fr: "fr-FR"
@@ -63,9 +52,10 @@ const Voice = (function () {
   function langCode() {
     return (typeof I18N !== "undefined") ? I18N.getLang() : "en";
   }
-  function speechLocale() { return SPEECH_LOCALE[langCode()] || "en-US"; }
+  function localeOf(code) { return SPEECH_LOCALE[code] || "en-US"; }
+  function speechLocale() { return localeOf(langCode()); }
 
-  /* Best installed voice for a locale: exact match, then language-subtag match. */
+  /* Best installed voice for a locale: exact match, then language-subtag. */
   function findVoice(locale) {
     if (!voices.length) loadVoices();
     if (!voices.length) return null;
@@ -77,49 +67,110 @@ const Voice = (function () {
     return v || null;
   }
 
+  /* Public: which installed voice (if any) covers a given app language code. */
+  function matchLang(code) { loadVoices(); return findVoice(localeOf(code)); }
+
   function setBtn(btn, key) { if (btn) btn.textContent = t(key); }
 
+  function clearKeepAlive() {
+    if (keepAlive) { clearInterval(keepAlive); keepAlive = null; }
+  }
+
   function stop() {
+    clearKeepAlive();
     if (synthSupported()) window.speechSynthesis.cancel();
     if (activeBtn) { setBtn(activeBtn, "read_aloud"); activeBtn = null; }
   }
 
-  function speak(text, btn) {
+  /* Wait (briefly) for the target voice if it isn't loaded yet, then cb(voice|null). */
+  function resolveVoice(locale, cb) {
+    loadVoices();
+    const v = findVoice(locale);
+    if (v) { cb(v); return; }
+    let settled = false;
+    function retry() {
+      if (settled) return;
+      settled = true;
+      loadVoices();
+      cb(findVoice(locale));
+    }
+    onVoices(function () { if (!settled && findVoice(locale)) retry(); });
+    setTimeout(retry, 2500);
+  }
+
+  /* Split long text into <=200-char chunks on sentence boundaries (works for
+     Latin, Devanagari ॥, Arabic ؟, CJK 。 punctuation). Long single utterances
+     are what trigger the Chromium mid-speech cutoff. */
+  function chunkText(text) {
+    const parts = text.match(/[^.!?。॥۔؟\n]+[.!?。॥۔؟\n]*/g) || [text];
+    const chunks = [];
+    let cur = "";
+    parts.forEach(function (p) {
+      if ((cur + p).length > 200 && cur) { chunks.push(cur); cur = p; }
+      else cur += p;
+    });
+    if (cur.trim()) chunks.push(cur);
+    return chunks;
+  }
+
+  function speakChunks(chunks, voice, btn) {
+    let i = 0;
+    function next() {
+      if (activeBtn !== btn) { clearKeepAlive(); return; }
+      if (i >= chunks.length) {
+        clearKeepAlive();
+        if (activeBtn === btn) { setBtn(btn, "read_aloud"); activeBtn = null; }
+        return;
+      }
+      const u = new SpeechSynthesisUtterance(chunks[i++]);
+      u.voice = voice;
+      u.lang = voice.lang;
+      u.rate = 0.95;
+      u.onend = next;
+      u.onerror = function () {
+        clearKeepAlive();
+        if (activeBtn === btn) { setBtn(btn, "read_aloud"); activeBtn = null; }
+      };
+      window.speechSynthesis.speak(u);
+    }
+    clearKeepAlive();
+    // Keepalive: Chromium pauses long queues; pause+resume every 9s keeps it going.
+    keepAlive = setInterval(function () {
+      if (synthSupported() && window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      }
+    }, 9000);
+    next();
+  }
+
+  /* text: what to read; btn: optional toggle button; localeOverride: force a
+     language (used by the Settings voice test). */
+  function speak(text, btn, localeOverride) {
     stop();
     if (!text) return;
     if (!synthSupported()) {
       if (window.appToast) window.appToast(t("voice_unavailable"));
       return;
     }
-    const locale = speechLocale();
+    const locale = localeOverride || speechLocale();
     activeBtn = btn || null;
-    setBtn(btn, "voice_loading"); // shows "Loading voice…" while we wait
+    setBtn(btn, "voice_loading");
 
     resolveVoice(locale, function (voice) {
       if (activeBtn !== btn) return; // user pressed stop meanwhile
       if (!voice) {
-        // Genuinely no installed voice for this language — explain, don't fail silently.
         setBtn(btn, "read_aloud");
         activeBtn = null;
         if (window.appToast) window.appToast(t("voice_unavailable"));
         return;
       }
-      const u = new SpeechSynthesisUtterance(text);
-      u.voice = voice;      // explicit voice — the key to non-English speech
-      u.lang = voice.lang;
-      u.rate = 0.95;
-      u.onend = function () {
-        if (activeBtn === btn) { setBtn(btn, "read_aloud"); activeBtn = null; }
-      };
-      u.onerror = function () {
-        if (activeBtn === btn) { setBtn(btn, "read_aloud"); activeBtn = null; }
-      };
       setBtn(btn, "stop_reading");
-      window.speechSynthesis.speak(u);
+      speakChunks(chunkText(text), voice, btn);
     });
   }
 
-  /* Short spoken alert for the kitchen timer (English, uses native engine). */
+  /* Short spoken alert for the kitchen timer (English). */
   function announce(text) {
     if (!synthSupported()) return;
     const v = findVoice("en-US");
@@ -131,7 +182,6 @@ const Voice = (function () {
 
   function bind(container) {
     container.querySelectorAll("[data-speak]").forEach(function (btn) {
-      // If truly nothing can speak, hide the control.
       if (!supported()) { btn.style.display = "none"; return; }
       btn.addEventListener("click", function () {
         if (activeBtn === btn) { stop(); return; }
@@ -140,5 +190,8 @@ const Voice = (function () {
     });
   }
 
-  return { supported: supported, speak: speak, announce: announce, stop: stop, bind: bind };
+  return {
+    supported: supported, speak: speak, announce: announce, stop: stop, bind: bind,
+    matchLang: matchLang, localeOf: localeOf, onVoices: onVoices, loadVoices: loadVoices
+  };
 })();

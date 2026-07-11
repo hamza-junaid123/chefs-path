@@ -1052,6 +1052,23 @@ a.lesson-row:hover { background: var(--bg-accent); }
 
 .settings-inline { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
 
+/* ---------- Voice diagnostic (Settings) ---------- */
+
+.voice-diag-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--border);
+}
+.voice-diag-row:last-child { border-bottom: none; }
+.voice-diag-name { flex: 1; font-weight: 600; min-width: 0; }
+.voice-diag-status { font-size: 0.85rem; font-weight: 700; white-space: nowrap; }
+.voice-diag-status.ok { color: var(--green); }
+.voice-diag-status.no { color: var(--text-soft); }
+.voice-diag-test { padding: 0.3rem 0.9rem; font-size: 0.85rem; }
+.voice-diag-test[disabled] { opacity: 0.4; cursor: not-allowed; }
+
 /* ---------- RTL polish ---------- */
 
 [dir="rtl"] .tech-steps li { padding: 0 3rem 1.1rem 0; }
