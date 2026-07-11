@@ -1,30 +1,20 @@
 /* ==========================================================================
-   Chef's Path — voice (read-aloud)
-   Two engines, chosen automatically:
-   1. Browser Speech Synthesis — free, offline. Used when the device has a
-      voice installed for the selected language. We select the matching voice
-      EXPLICITLY: setting only utterance.lang leaves Chromium/Edge on the
-      English voice for languages like Urdu/Arabic/Hindi (the bug this fixes).
-   2. OpenAI text-to-speech — used as a fallback when no local voice exists
-      for the language (e.g. Urdu on most Windows installs). Requires the
-      OpenAI key saved in Settings; speaks essentially any language.
-   If neither is available, the user gets a clear, translated message.
+   Chef's Path — voice (read-aloud) via the browser's Speech Synthesis API.
+   Free, offline, no key. Used when the device has a voice installed for the
+   selected language. We select the matching voice EXPLICITLY: setting only
+   utterance.lang leaves Chromium/Edge on the English voice for languages like
+   Urdu/Arabic/Hindi (the bug this addresses). If the device has no voice for
+   the language, the user gets a clear, translated message instead of silence.
    ========================================================================== */
 
 const Voice = (function () {
   let activeBtn = null;
   let voices = [];
-  let currentAudio = null; // OpenAI TTS playback
 
   function synthSupported() {
     return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
   }
-  // Buttons are always useful: even without a local voice we may have OpenAI TTS.
-  function supported() { return synthSupported() || hasKey(); }
-
-  function hasKey() {
-    return typeof Assistant !== "undefined" && !!Assistant.apiKey();
-  }
+  function supported() { return synthSupported(); }
 
   function loadVoices() {
     if (synthSupported()) voices = window.speechSynthesis.getVoices() || [];
@@ -59,7 +49,6 @@ const Voice = (function () {
 
   function stop() {
     if (synthSupported()) window.speechSynthesis.cancel();
-    if (currentAudio) { try { currentAudio.pause(); } catch (e) {} currentAudio = null; }
     if (activeBtn) { setBtn(activeBtn, "read_aloud"); activeBtn = null; }
   }
 
@@ -87,48 +76,8 @@ const Voice = (function () {
       return;
     }
 
-    // No local voice for this language — use OpenAI TTS if a key is set.
-    if (hasKey()) {
-      activeBtn = btn || null;
-      setBtn(btn, "voice_loading");
-      speakOpenAI(text, btn);
-      return;
-    }
-
-    // Nothing available — explain (translated) instead of failing silently.
+    // No installed voice for this language — explain instead of failing silently.
     if (window.appToast) window.appToast(t("voice_unavailable"));
-  }
-
-  async function speakOpenAI(text, btn) {
-    try {
-      const res = await fetch("https://api.openai.com/v1/audio/speech", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + Assistant.apiKey()
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini-tts",
-          voice: "alloy",
-          input: text.slice(0, 4000) // API input cap
-        })
-      });
-      if (!res.ok) throw new Error("TTS HTTP " + res.status);
-      const blob = await res.blob();
-      if (activeBtn !== btn) return; // user pressed stop while it loaded
-      const audio = new Audio(URL.createObjectURL(blob));
-      currentAudio = audio;
-      setBtn(btn, "stop_reading");
-      audio.onended = function () {
-        if (activeBtn === btn) { setBtn(btn, "read_aloud"); activeBtn = null; }
-        currentAudio = null;
-      };
-      audio.play();
-    } catch (e) {
-      currentAudio = null;
-      if (activeBtn === btn) { setBtn(btn, "read_aloud"); activeBtn = null; }
-      if (window.appToast) window.appToast(t("voice_error"));
-    }
   }
 
   /* Short spoken alert for the kitchen timer (English, uses native engine). */

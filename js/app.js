@@ -994,8 +994,6 @@
         l.name + "</option>";
     }).join("");
 
-    const hasKey = !!Assistant.apiKey();
-
     app.innerHTML =
       '<h1 class="page-title">' + t("settings") + '</h1>' +
       '<p class="page-sub">' + t("settings_sub") + '</p>' +
@@ -1012,18 +1010,6 @@
           '<h3>🌍 ' + t("language") + '</h3><p>' + t("language_desc") + '</p>' +
         '</div>' +
         '<select class="settings-select" id="lang-select">' + langOptions + '</select>' +
-      '</div>' +
-
-      '<div class="card settings-row">' +
-        '<div class="settings-row-body">' +
-          '<h3>🤖 ' + t("ai_key_title") + '</h3><p>' + t("ai_key_desc") + '</p>' +
-          '<div class="settings-inline" style="margin-top:0.6rem">' +
-            '<input type="password" class="settings-input" id="api-key-input" placeholder="sk-..." value="' +
-              (hasKey ? esc(Assistant.apiKey()) : "") + '">' +
-            '<button class="btn btn-primary" id="api-key-save">' + t("save") + '</button>' +
-            (hasKey ? '<button class="btn btn-ghost" id="api-key-remove">' + t("remove") + '</button>' : "") +
-          '</div>' +
-        '</div>' +
       '</div>' +
 
       '<div class="card settings-row">' +
@@ -1048,19 +1034,6 @@
     document.getElementById("lang-select").addEventListener("change", function (e) {
       I18N.setLang(e.target.value);
       applyChrome();
-      viewSettings();
-    });
-
-    document.getElementById("api-key-save").addEventListener("click", function () {
-      const v = document.getElementById("api-key-input").value.trim();
-      Assistant.setApiKey(v);
-      toast(t("saved"));
-      viewSettings();
-    });
-    const removeBtn = document.getElementById("api-key-remove");
-    if (removeBtn) removeBtn.addEventListener("click", function () {
-      Assistant.setApiKey("");
-      toast(t("key_removed"));
       viewSettings();
     });
 

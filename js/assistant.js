@@ -1,23 +1,13 @@
 /* ==========================================================================
-   Chef's Path — AI cooking assistant
-   Floating chat available on every page.
-   - With an OpenAI API key (saved in Settings → localStorage only, never in
-     the repo): real AI answers via api.openai.com, tuned to this course.
-   - Without a key: the built-in Chef Bot answers offline — unit conversions,
-     ingredient substitutions, safe temperatures, dish fixes, course search.
+   Chef's Path — Chef Bot cooking assistant
+   Floating chat available on every page. Fully offline, no API, no key:
+   answers unit conversions, ingredient substitutions, safe temperatures,
+   dish fixes, and finds course lessons — all from built-in knowledge.
    ========================================================================== */
 
 const Assistant = (function () {
-  const KEY_STORAGE = "chefs-path-openai-key";
   let panelOpen = false;
   let history = []; // {role:'user'|'assistant', content}
-  let busy = false;
-
-  function apiKey() { return localStorage.getItem(KEY_STORAGE) || ""; }
-  function setApiKey(k) {
-    if (k) localStorage.setItem(KEY_STORAGE, k.trim());
-    else localStorage.removeItem(KEY_STORAGE);
-  }
 
   function escHtml(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -175,53 +165,6 @@ const Assistant = (function () {
   }
 
   /* ------------------------------------------------------------------
-     OpenAI mode
-     ------------------------------------------------------------------ */
-
-  function courseOutline() {
-    return CONTENT.levels.map(function (l) {
-      return "Level " + l.id + " (" + l.title + "): " +
-        l.lessons.map(function (x) { return x.title; }).join("; ");
-    }).join("\n");
-  }
-
-  function systemPrompt() {
-    let ctx = "";
-    const m = location.hash.match(/^#\/lesson\/(.+)$/);
-    if (m) {
-      for (const level of CONTENT.levels) {
-        const lesson = level.lessons.find(function (x) { return x.id === m[1]; });
-        if (lesson && !lesson.stub) {
-          ctx = "\nThe user is currently viewing the lesson \"" + lesson.title +
-            "\" (recipe: " + lesson.recipe.name + ").";
-        }
-      }
-    }
-    return "You are the Chef Assistant on \"Chef's Path\", a beginner-to-advanced home-cooking course website. " +
-      "Answer cooking questions clearly and encouragingly for home cooks. Be concise (under 150 words unless asked for detail). " +
-      "Give both metric and US measurements. Prioritize food safety. " +
-      "If relevant, point to a course lesson by name.\nCourse outline:\n" + courseOutline() + ctx +
-      "\nRespond in the same language the user writes in.";
-  }
-
-  async function openaiAnswer(q) {
-    const msgs = [{ role: "system", content: systemPrompt() }]
-      .concat(history.slice(-8))
-      .concat([{ role: "user", content: q }]);
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + apiKey()
-      },
-      body: JSON.stringify({ model: "gpt-4o-mini", messages: msgs, max_tokens: 500, temperature: 0.6 })
-    });
-    if (!res.ok) throw new Error("OpenAI HTTP " + res.status);
-    const data = await res.json();
-    return data.choices[0].message.content.trim();
-  }
-
-  /* ------------------------------------------------------------------
      UI
      ------------------------------------------------------------------ */
 
@@ -271,7 +214,7 @@ const Assistant = (function () {
     el("chef-panel").hidden = !panelOpen;
     el("chef-fab").classList.toggle("open", panelOpen);
     if (panelOpen && !el("chef-msgs").childElementCount) {
-      addMsg("assistant", t("assistant_hi") + (apiKey() ? "" : "\n\n" + t("assistant_offline_note")));
+      addMsg("assistant", t("assistant_hi"));
     }
     if (panelOpen) el("chef-input").focus();
   }
@@ -285,29 +228,14 @@ const Assistant = (function () {
     return div;
   }
 
-  async function ask(q) {
-    if (busy) return;
+  function ask(q) {
     addMsg("user", q);
     history.push({ role: "user", content: q });
-
-    let answer;
-    if (apiKey()) {
-      busy = true;
-      const thinking = addMsg("assistant", t("assistant_thinking"));
-      try {
-        answer = await openaiAnswer(q);
-      } catch (err) {
-        answer = t("assistant_error") + "\n\n" + offlineAnswer(q);
-      }
-      thinking.remove();
-      busy = false;
-    } else {
-      answer = offlineAnswer(q);
-    }
+    const answer = offlineAnswer(q);
     history.push({ role: "assistant", content: answer });
     if (history.length > 24) history = history.slice(-24);
     addMsg("assistant", answer);
   }
 
-  return { inject: inject, refreshChrome: refreshChrome, apiKey: apiKey, setApiKey: setApiKey };
+  return { inject: inject, refreshChrome: refreshChrome };
 })();
