@@ -992,7 +992,6 @@
     en: "This is the English voice.",
     ur: "یہ اردو کی آواز ہے۔",
     ar: "هذا هو الصوت العربي.",
-    hi: "यह हिंदी की आवाज़ है।",
     es: "Esta es la voz en español.",
     fr: "Ceci est la voix française."
   };

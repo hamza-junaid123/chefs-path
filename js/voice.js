@@ -47,7 +47,7 @@ const Voice = (function () {
   function onVoices(cb) { voiceListeners.push(cb); }
 
   const SPEECH_LOCALE = {
-    en: "en-US", ur: "ur-PK", ar: "ar-SA", hi: "hi-IN", es: "es-ES", fr: "fr-FR"
+    en: "en-US", ur: "ur-PK", ar: "ar-SA", es: "es-ES", fr: "fr-FR"
   };
   function langCode() {
     return (typeof I18N !== "undefined") ? I18N.getLang() : "en";
