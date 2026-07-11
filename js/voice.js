@@ -98,11 +98,13 @@ const Voice = (function () {
     setTimeout(retry, 2500);
   }
 
-  /* Split long text into <=200-char chunks on sentence boundaries (works for
-     Latin, Devanagari ॥, Arabic ؟, CJK 。 punctuation). Long single utterances
-     are what trigger the Chromium mid-speech cutoff. */
+  /* Split long text into <=200-char chunks on sentence boundaries. Includes
+     the Devanagari danda । (U+0964, the normal Hindi sentence end) and ॥, the
+     Urdu/Arabic full stop ۔ and ؟, and CJK 。 — otherwise Hindi text has no
+     Latin ./!/? to split on, becomes one giant utterance, and triggers the
+     Chromium mid-speech cutoff (the reason Hindi read-aloud failed). */
   function chunkText(text) {
-    const parts = text.match(/[^.!?。॥۔؟\n]+[.!?。॥۔؟\n]*/g) || [text];
+    const parts = text.match(/[^.!?।॥。۔؟\n]+[.!?।॥。۔؟\n]*/g) || [text];
     const chunks = [];
     let cur = "";
     parts.forEach(function (p) {
