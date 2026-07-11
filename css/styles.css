@@ -918,6 +918,17 @@ a.lesson-row:hover { background: var(--bg-accent); }
 
 .game-hud .lives { letter-spacing: 0.15em; }
 
+.game-mute {
+  margin-left: auto;
+  background: var(--bg-accent);
+  border: none;
+  border-radius: 999px;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.3rem 0.55rem;
+}
+.game-mute:hover { background: var(--accent-soft); }
+
 .game-overlay { text-align: center; margin-top: 0.8rem; }
 
 /* ---------- Assistant chat ---------- */

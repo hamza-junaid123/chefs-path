@@ -856,6 +856,8 @@
         '<span>' + t("game_score") + ': <span id="game-score">0</span></span>' +
         '<span class="lives" id="game-lives">❤️❤️❤️</span>' +
         '<span>' + t("game_best") + ': <span id="game-best">' + Game.best() + '</span></span>' +
+        '<button class="game-mute" id="game-mute" aria-label="' + t("game_sound") + '" title="' + t("game_sound") + '">' +
+          (Game.isMuted() ? "🔇" : "🔊") + '</button>' +
       '</div>' +
       '<canvas id="game-canvas" class="game-canvas"></canvas>' +
       '<div class="game-overlay" id="game-overlay">' +
@@ -883,6 +885,12 @@
       }
     });
     bindGameStart();
+
+    const muteBtn = document.getElementById("game-mute");
+    if (muteBtn) muteBtn.addEventListener("click", function () {
+      Game.setMuted(!Game.isMuted());
+      muteBtn.textContent = Game.isMuted() ? "🔇" : "🔊";
+    });
   }
 
   function bindGameStart() {
