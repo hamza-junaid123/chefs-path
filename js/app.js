@@ -957,7 +957,8 @@
     });
   }
 
-  /* live updates: header chip everywhere + display on the timer page */
+  /* live updates: header chip everywhere + tab title + display on timer page */
+  const BASE_TITLE = document.title;
   Timer.onChange(function () {
     const chip = document.getElementById("timer-chip");
     if (Timer.active() || Timer.finished()) {
@@ -968,6 +969,11 @@
     } else {
       chip.hidden = true;
     }
+
+    // Live countdown in the browser tab title, so a backgrounded tab shows it.
+    if (Timer.finished()) document.title = "⏰ Time's up! · Chef's Path";
+    else if (Timer.active()) document.title = "⏱ " + Timer.remainingText() + " · Chef's Path";
+    else if (document.title !== BASE_TITLE) document.title = BASE_TITLE;
 
     const disp = document.getElementById("timer-display");
     if (disp && Timer.active() && !Timer.finished()) {
@@ -1150,6 +1156,12 @@
   }
 
   window.addEventListener("hashchange", route);
+
+  // Service worker: powers reliable background timer notifications. Needs a
+  // secure context, so it silently no-ops on file:// — the timer still works.
+  if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  }
 
   Assistant.inject();
   applyChrome();

@@ -1,9 +1,12 @@
 /* ==========================================================================
    Chef's Path — kitchen timer
-   Survives page reloads (end time stored in localStorage) and keeps running
-   across all pages. Fires alerts when 20, 15, 10 and 5 minutes remain and
-   when time is up: browser notification + beeps + spoken announcement +
-   on-screen toast. The header shows a live countdown chip on every page.
+   Runs in the background: the end time is stored absolutely in localStorage,
+   so the countdown stays correct across page reloads, across all pages, and
+   while the tab is hidden. Alerts fire at 20/15/10/5 min left and at 0:00 —
+   browser notification (via the service worker so it shows even when the tab
+   is backgrounded) + beeps + spoken announcement + on-screen toast. When the
+   tab regains focus it "catches up" and fires anything that came due while
+   away. The header chip and the browser tab title show a live countdown.
    ========================================================================== */
 
 const Timer = (function () {
@@ -71,12 +74,31 @@ const Timer = (function () {
     }
   }
 
-  function notify(body) {
+  const NOTIF_ICON =
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🍳%3C/text%3E%3C/svg%3E";
+
+  function notify(body, opts) {
+    opts = opts || {};
     try {
-      if ("Notification" in window && Notification.permission === "granted") {
-        new Notification("Chef's Path ⏱", { body: body });
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
+      const options = {
+        body: body,
+        tag: "chefs-path-timer",   // replaces the previous timer notification
+        renotify: true,
+        icon: NOTIF_ICON,
+        requireInteraction: !!opts.requireInteraction
+      };
+      // Prefer the service worker: its notifications show reliably while the
+      // tab is backgrounded and survive until dismissed. Fall back to a
+      // page-context Notification (e.g. when opened from file://).
+      if ("serviceWorker" in navigator && navigator.serviceWorker.ready) {
+        navigator.serviceWorker.ready
+          .then(function (reg) { return reg.showNotification("Chef's Path ⏱", options); })
+          .catch(function () { try { new Notification("Chef's Path ⏱", options); } catch (e) {} });
+      } else {
+        new Notification("Chef's Path ⏱", options);
       }
-    } catch (e) { /* notifications unavailable (e.g. file://) */ }
+    } catch (e) { /* notifications unavailable */ }
   }
 
   function requestPermission() {
@@ -98,7 +120,7 @@ const Timer = (function () {
   function alertDone() {
     const msg = t("time_up");
     beep(6);
-    notify(msg);
+    notify(msg, { requireInteraction: true }); // stays up until dismissed
     if (typeof Voice !== "undefined") Voice.announce("Time's up! Check your food!");
     if (window.appToast) window.appToast(msg);
   }
@@ -138,6 +160,20 @@ const Timer = (function () {
   }
   function stopTick() {
     if (interval) { clearInterval(interval); interval = null; }
+  }
+
+  /* Background browsers throttle (and sleeping devices pause) setInterval, so
+     when the page regains focus we immediately catch up: fire any milestone or
+     finish alert that came due while away and refresh the display. */
+  function catchUp() {
+    if (state) { tick(); startTick(); }
+  }
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) catchUp();
+    });
+    window.addEventListener("focus", catchUp);
+    window.addEventListener("pageshow", catchUp);
   }
 
   function start(minutes) {
