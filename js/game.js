@@ -179,7 +179,27 @@ const Game = (function () {
     sfxGameOver();
     if (raf) cancelAnimationFrame(raf);
     raf = null;
+    drawGameOver();
     emitState(true);
+  }
+
+  /* Big crying face + "Game Over" painted onto the game board. */
+  function drawGameOver() {
+    if (!ctx || !canvas) return;
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.font = "78px serif";
+    ctx.fillText("😭", W / 2, H / 2 - 34);
+
+    const accent = (getComputedStyle(document.documentElement)
+      .getPropertyValue("--accent") || "#c25e35").trim();
+    const label = (typeof t === "function" ? t("game_over") : "Game Over!");
+    ctx.fillStyle = accent;
+    ctx.font = "bold 34px Georgia, 'Times New Roman', serif";
+    ctx.fillText(label.toUpperCase(), W / 2, H / 2 + 48);
   }
 
   /* ---- input ---- */

@@ -878,8 +878,8 @@
       document.getElementById("game-lives").textContent = "❤️".repeat(Math.max(0, st.lives));
       const overlay = document.getElementById("game-overlay");
       if (st.over) {
-        overlay.innerHTML = '<p style="font-weight:700;margin-bottom:0.5rem">' + t("game_over") +
-          " " + t("game_score") + ": " + st.score + '</p>' +
+        overlay.innerHTML = '<p style="font-weight:700;margin-bottom:0.5rem">' +
+          t("game_score") + ": " + st.score + " · " + t("game_best") + ": " + st.best + '</p>' +
           '<button class="btn btn-primary" id="game-start-btn">' + t("game_again") + '</button>';
         bindGameStart();
       }
