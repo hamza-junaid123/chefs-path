@@ -55,16 +55,37 @@ const Voice = (function () {
   function localeOf(code) { return SPEECH_LOCALE[code] || "en-US"; }
   function speechLocale() { return localeOf(langCode()); }
 
-  /* Best installed voice for a locale: exact match, then language-subtag. */
+  /* How human a voice sounds — higher is better. The single biggest lever for
+     "not robotic": prefer modern natural/neural/online voices (Microsoft
+     "… Online (Natural)", Google, Apple Siri/Enhanced/Premium) over the old
+     robotic desktop voices (David, Zira, eSpeak, "compact"). */
+  function voiceScore(v, wantLocale) {
+    const n = (v.name || "").toLowerCase();
+    let s = 0;
+    if (v.lang && v.lang.toLowerCase() === wantLocale) s += 25; // right dialect
+    if (/natural|neural/.test(n)) s += 130;
+    if (/enhanced|premium/.test(n)) s += 110;
+    if (/online/.test(n)) s += 70;
+    if (/google|siri/.test(n)) s += 60;
+    if (v.localService === false) s += 15;                      // cloud voices ≈ nicer
+    if (/compact|espeak|pico|robo/.test(n)) s -= 120;
+    if (/david|zira|mark|hazel|hortense/.test(n)) s -= 30;      // legacy robotic MS voices
+    return s;
+  }
+
+  /* Best-sounding installed voice for a locale (language-subtag match, ranked
+     by quality). */
   function findVoice(locale) {
     if (!voices.length) loadVoices();
     if (!voices.length) return null;
     const want = locale.toLowerCase();
     const sub = want.split("-")[0];
-    let v = voices.find(function (x) { return x.lang && x.lang.toLowerCase() === want; });
-    if (v) return v;
-    v = voices.find(function (x) { return x.lang && x.lang.toLowerCase().split("-")[0] === sub; });
-    return v || null;
+    const cands = voices.filter(function (v) {
+      return v.lang && v.lang.toLowerCase().split("-")[0] === sub;
+    });
+    if (!cands.length) return null;
+    cands.sort(function (a, b) { return voiceScore(b, want) - voiceScore(a, want); });
+    return cands[0];
   }
 
   /* Public: which installed voice (if any) covers a given app language code. */
@@ -127,7 +148,8 @@ const Voice = (function () {
       const u = new SpeechSynthesisUtterance(chunks[i++]);
       u.voice = voice;
       u.lang = voice.lang;
-      u.rate = 0.95;
+      u.rate = 1.0;   // natural cadence (0.95 dragged and sounded more robotic)
+      u.pitch = 1.0;
       u.onend = next;
       u.onerror = function () {
         clearKeepAlive();
