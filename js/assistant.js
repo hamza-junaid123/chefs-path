@@ -1,22 +1,40 @@
 /* ==========================================================================
-   Chef's Path — Chef Bot cooking assistant
-   Floating chat available on every page. Fully offline, no API, no key:
-   answers unit conversions, ingredient substitutions, safe temperatures,
-   dish fixes, and finds course lessons — all from built-in knowledge.
+   Chef's Path — Chef assistant
+   Floating chat available on every page.
+   - Bring-your-own-key AI: connect OpenAI, Anthropic (Claude), Google (Gemini),
+     or any OpenAI-compatible endpoint in Settings to answer ANY cooking
+     question. The key lives only in this browser (localStorage), never in the
+     repo; questions go straight from the browser to the chosen provider.
+   - No key? The built-in offline Chef Bot still answers conversions,
+     substitutions, safe temperatures, dish fixes, and finds course lessons.
    ========================================================================== */
 
 const Assistant = (function () {
   let panelOpen = false;
+  let busy = false;
   let history = []; // {role:'user'|'assistant', content}
+
+  const AI_KEY = "chefs-path-ai"; // { provider, key, model, baseUrl }
+
+  const PROVIDERS = {
+    openai:    { name: "OpenAI",                    model: "gpt-4o-mini",              base: false },
+    anthropic: { name: "Anthropic (Claude)",        model: "claude-3-5-sonnet-latest", base: false },
+    gemini:    { name: "Google (Gemini)",           model: "gemini-1.5-flash",         base: false },
+    custom:    { name: "Custom (OpenAI-compatible)", model: "",                         base: true }
+  };
 
   function escHtml(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  /* minimal formatting: keep line breaks, **bold**, and internal #/lesson links */
+  /* Light markdown → HTML: **bold**, *italic*, headings, bullets, internal
+     #/lesson links, and line breaks. Enough to render AI answers cleanly. */
   function fmt(s) {
     let h = escHtml(s);
+    h = h.replace(/^\s{0,3}#{1,6}\s*(.+)$/gm, "<strong>$1</strong>"); // headings → bold
+    h = h.replace(/^\s*[-*]\s+/gm, "• ");                              // bullets
     h = h.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");          // *italic*
     h = h.replace(/\[([^\]]+)\]\((#\/[a-z0-9\/-]+)\)/gi, '<a href="$2">$1</a>');
     return h.replace(/\n/g, "<br>");
   }
@@ -165,6 +183,122 @@ const Assistant = (function () {
   }
 
   /* ------------------------------------------------------------------
+     AI providers (bring your own key)
+     ------------------------------------------------------------------ */
+
+  function aiConfig() {
+    try {
+      const c = JSON.parse(localStorage.getItem(AI_KEY) || "null");
+      if (c && c.provider && c.key && PROVIDERS[c.provider]) return c;
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+  function setAiConfig(cfg) {
+    if (cfg && cfg.provider && cfg.key) localStorage.setItem(AI_KEY, JSON.stringify(cfg));
+    else localStorage.removeItem(AI_KEY);
+  }
+  function hasAI() { return !!aiConfig(); }
+
+  function courseOutline() {
+    return CONTENT.levels.map(function (l) {
+      return "Level " + l.id + " (" + l.title + "): " +
+        l.lessons.map(function (x) { return x.title; }).join("; ");
+    }).join("\n");
+  }
+
+  function systemPrompt() {
+    let ctx = "";
+    const m = location.hash.match(/^#\/lesson\/(.+)$/);
+    if (m) {
+      for (const level of CONTENT.levels) {
+        const lesson = level.lessons.find(function (x) { return x.id === m[1]; });
+        if (lesson && !lesson.stub) {
+          ctx = "\nThe user is currently viewing the lesson \"" + lesson.title +
+            "\" (recipe: " + lesson.recipe.name + ").";
+        }
+      }
+    }
+    return "You are the friendly Chef Assistant on \"Chef's Path\", a beginner-to-advanced " +
+      "home-cooking course. Answer ANY cooking question clearly and encouragingly for home " +
+      "cooks — recipes, techniques, substitutions, flavor pairings, meal ideas, food safety. " +
+      "Be concise unless asked for detail. Give both metric and US measurements. Prioritise " +
+      "food safety. When relevant, mention a course lesson by name.\nCourse outline:\n" +
+      courseOutline() + ctx + "\nReply in the same language the user writes in.";
+  }
+
+  /* Anthropic/Gemini require the first message to be from the user. */
+  function dropLeadingAssistant(msgs) {
+    const out = msgs.slice();
+    while (out.length && out[0].role === "assistant") out.shift();
+    return out;
+  }
+
+  async function callAI(msgs) {
+    const cfg = aiConfig();
+    if (cfg.provider === "anthropic") return callAnthropic(cfg, dropLeadingAssistant(msgs));
+    if (cfg.provider === "gemini") return callGemini(cfg, dropLeadingAssistant(msgs));
+    return callOpenAICompatible(cfg, msgs); // openai + custom
+  }
+
+  async function callOpenAICompatible(cfg, msgs) {
+    let base = (cfg.baseUrl || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
+    const res = await fetch(base + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.key },
+      body: JSON.stringify({
+        model: cfg.model || "gpt-4o-mini",
+        messages: [{ role: "system", content: systemPrompt() }].concat(msgs),
+        max_tokens: 700, temperature: 0.6
+      })
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    return data.choices[0].message.content.trim();
+  }
+
+  async function callAnthropic(cfg, msgs) {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": cfg.key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: cfg.model || "claude-3-5-sonnet-latest",
+        max_tokens: 900,
+        system: systemPrompt(),
+        messages: msgs.map(function (m) {
+          return { role: m.role === "assistant" ? "assistant" : "user", content: m.content };
+        })
+      })
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    return (data.content && data.content[0] && data.content[0].text || "").trim();
+  }
+
+  async function callGemini(cfg, msgs) {
+    const model = cfg.model || "gemini-1.5-flash";
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+      encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(cfg.key);
+    const contents = msgs.map(function (m) {
+      return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] };
+    });
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ system_instruction: { parts: [{ text: systemPrompt() }] }, contents: contents })
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    const parts = data.candidates && data.candidates[0] && data.candidates[0].content &&
+      data.candidates[0].content.parts;
+    return (parts && parts.map(function (p) { return p.text || ""; }).join("") || "").trim();
+  }
+
+  /* ------------------------------------------------------------------
      UI
      ------------------------------------------------------------------ */
 
@@ -214,7 +348,7 @@ const Assistant = (function () {
     el("chef-panel").hidden = !panelOpen;
     el("chef-fab").classList.toggle("open", panelOpen);
     if (panelOpen && !el("chef-msgs").childElementCount) {
-      addMsg("assistant", t("assistant_hi"));
+      addMsg("assistant", t("assistant_hi") + (hasAI() ? "" : "\n\n" + t("assistant_offline_note")));
     }
     if (panelOpen) el("chef-input").focus();
   }
@@ -228,14 +362,33 @@ const Assistant = (function () {
     return div;
   }
 
-  function ask(q) {
+  async function ask(q) {
+    if (busy) return;
     addMsg("user", q);
     history.push({ role: "user", content: q });
-    const answer = offlineAnswer(q);
+    if (history.length > 20) history = history.slice(-20);
+
+    let answer;
+    if (hasAI()) {
+      busy = true;
+      const thinking = addMsg("assistant", t("assistant_thinking"));
+      try {
+        answer = await callAI(history.slice(-10));
+        if (!answer) throw new Error("empty");
+      } catch (e) {
+        answer = t("assistant_error") + "\n\n" + offlineAnswer(q);
+      }
+      thinking.remove();
+      busy = false;
+    } else {
+      answer = offlineAnswer(q);
+    }
     history.push({ role: "assistant", content: answer });
-    if (history.length > 24) history = history.slice(-24);
     addMsg("assistant", answer);
   }
 
-  return { inject: inject, refreshChrome: refreshChrome };
+  return {
+    inject: inject, refreshChrome: refreshChrome,
+    aiConfig: aiConfig, setAiConfig: setAiConfig, hasAI: hasAI, PROVIDERS: PROVIDERS
+  };
 })();

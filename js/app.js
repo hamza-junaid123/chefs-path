@@ -1195,6 +1195,74 @@
      View: Settings
      ------------------------------------------------------------------ */
 
+  /* AI provider config form (inside Settings). */
+  function aiConfigHtml() {
+    const cfg = Assistant.aiConfig();
+    const provider = (cfg && cfg.provider) || "openai";
+    const meta = Assistant.PROVIDERS[provider];
+    const model = (cfg && cfg.model) || meta.model;
+    const options = Object.keys(Assistant.PROVIDERS).map(function (p) {
+      return '<option value="' + p + '"' + (p === provider ? " selected" : "") + '>' +
+        esc(Assistant.PROVIDERS[p].name) + "</option>";
+    }).join("");
+    return (cfg ? '<p class="ai-connected">✅ ' +
+        esc(t("ai_connected", { p: Assistant.PROVIDERS[cfg.provider].name })) + "</p>" : "") +
+      '<div class="ai-field"><label>' + t("ai_provider") + '</label>' +
+        '<select class="settings-select" id="ai-provider">' + options + "</select></div>" +
+      '<div class="ai-field"><label>API key</label>' +
+        '<input type="password" class="settings-input" id="ai-key" placeholder="sk-… / key" value="' +
+          (cfg ? esc(cfg.key) : "") + '"></div>' +
+      '<div class="ai-field"><label>' + t("ai_model") + '</label>' +
+        '<input type="text" class="settings-input" id="ai-model" placeholder="' +
+          esc(meta.model || "model") + '" value="' + esc(model) + '"></div>' +
+      '<div class="ai-field" id="ai-base-field"' + (meta.base ? "" : " hidden") + '><label>' +
+        t("ai_base_url") + '</label>' +
+        '<input type="text" class="settings-input" id="ai-base" placeholder="https://…/v1" value="' +
+          (cfg && cfg.baseUrl ? esc(cfg.baseUrl) : "") + '"></div>' +
+      '<div class="settings-inline" style="margin-top:0.6rem">' +
+        '<button class="btn btn-primary" id="ai-save">' + t("save") + '</button>' +
+        (cfg ? '<button class="btn btn-ghost" id="ai-disconnect">' + t("ai_disconnect") + '</button>' : "") +
+      '</div>' +
+      '<p class="ai-privacy">' + t("ai_privacy") + '</p>';
+  }
+
+  function bindAiConfig() {
+    const providerSel = document.getElementById("ai-provider");
+    if (!providerSel) return;
+
+    providerSel.addEventListener("change", function () {
+      const meta = Assistant.PROVIDERS[providerSel.value];
+      const modelInput = document.getElementById("ai-model");
+      modelInput.value = meta.model || "";
+      modelInput.placeholder = meta.model || "model";
+      document.getElementById("ai-base-field").hidden = !meta.base;
+    });
+
+    document.getElementById("ai-save").addEventListener("click", function () {
+      const key = document.getElementById("ai-key").value.trim();
+      if (!key) { document.getElementById("ai-key").focus(); return; }
+      const baseEl = document.getElementById("ai-base");
+      Assistant.setAiConfig({
+        provider: providerSel.value,
+        key: key,
+        model: document.getElementById("ai-model").value.trim(),
+        baseUrl: baseEl ? baseEl.value.trim() : ""
+      });
+      toast(t("saved"));
+      Assistant.refreshChrome();
+      document.getElementById("ai-config").innerHTML = aiConfigHtml();
+      bindAiConfig();
+    });
+
+    const disc = document.getElementById("ai-disconnect");
+    if (disc) disc.addEventListener("click", function () {
+      Assistant.setAiConfig(null);
+      toast(t("key_removed"));
+      document.getElementById("ai-config").innerHTML = aiConfigHtml();
+      bindAiConfig();
+    });
+  }
+
   function viewSettings() {
     const langOptions = I18N.LANGS.map(function (l) {
       return '<option value="' + l.code + '"' + (I18N.getLang() === l.code ? " selected" : "") + '>' +
@@ -1217,6 +1285,13 @@
           '<h3>🌍 ' + t("language") + '</h3><p>' + t("language_desc") + '</p>' +
         '</div>' +
         '<select class="settings-select" id="lang-select">' + langOptions + '</select>' +
+      '</div>' +
+
+      '<div class="card settings-row" style="display:block">' +
+        '<div class="settings-row-body" style="min-width:0">' +
+          '<h3>🤖 ' + t("ai_title") + '</h3><p>' + t("ai_desc") + '</p>' +
+          '<div id="ai-config" style="margin-top:0.8rem">' + aiConfigHtml() + '</div>' +
+        '</div>' +
       '</div>' +
 
       '<div class="card settings-row" style="display:block">' +
@@ -1250,6 +1325,8 @@
       applyChrome();
       viewSettings();
     });
+
+    bindAiConfig();
 
     document.getElementById("reset-btn").addEventListener("click", function () {
       if (confirm(t("reset_confirm"))) {

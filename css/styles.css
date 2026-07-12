@@ -1138,6 +1138,27 @@ a.lesson-row:hover { background: var(--bg-accent); }
 
 .settings-inline { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
 
+/* AI provider config */
+.ai-field { margin-bottom: 0.6rem; }
+.ai-field label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-soft);
+  margin-bottom: 0.25rem;
+}
+.ai-field .settings-input, .ai-field .settings-select { width: min(24rem, 100%); }
+.ai-connected {
+  color: var(--green);
+  font-weight: 700;
+  margin-bottom: 0.7rem;
+}
+.ai-privacy {
+  font-size: 0.8rem;
+  color: var(--text-soft);
+  margin-top: 0.7rem;
+}
+
 /* ---------- Voice diagnostic (Settings) ---------- */
 
 .voice-diag-row {
