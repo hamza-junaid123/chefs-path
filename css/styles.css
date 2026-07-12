@@ -679,6 +679,81 @@ a.lesson-row:hover { background: var(--bg-accent); }
 
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* ---------- Cook / pantry page ---------- */
+
+.ing-selected-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.9rem 0 0.2rem;
+}
+.ing-selected-label { font-weight: 700; color: var(--text-soft); font-size: 0.9rem; }
+
+.ing-clear {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: underline;
+}
+
+.ing-cat { margin-top: 1rem; }
+.ing-cat h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-soft);
+  margin-bottom: 0.5rem;
+}
+
+.ing-grid { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+
+.ing-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1.5px solid var(--border);
+  background: var(--card-soft);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.38rem 0.8rem;
+  font-size: 0.9rem;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.ing-chip:hover { border-color: var(--accent); }
+.ing-chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-strong); font-weight: 600; }
+.ing-emoji { font-size: 1.05rem; line-height: 1; }
+.ing-x { color: var(--danger); font-weight: 700; margin-left: 0.1rem; }
+
+.cook-section { font-size: 1.25rem; margin: 1.5rem 0 0.8rem; }
+
+.cook-recipe { padding: 1rem 1.1rem; margin-bottom: 0.9rem; }
+
+.cook-recipe-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  text-decoration: none;
+  color: var(--text);
+}
+.cook-recipe-head:hover .recipe-tile-title { color: var(--accent); }
+
+.cook-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.7rem 0; }
+
+.mini-chip {
+  font-size: 0.78rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  white-space: nowrap;
+}
+.mini-chip.have { background: var(--green-soft); color: var(--green); }
+.mini-chip.miss { background: var(--accent-soft); color: var(--accent-strong); }
+.miss-label { font-size: 0.78rem; font-weight: 700; color: var(--text-soft); }
+
+.cook-open { padding: 0.4rem 1rem; font-size: 0.88rem; }
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 620px) {

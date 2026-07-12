@@ -1041,6 +1041,160 @@
     });
   }
 
+  /* ------------------------------------------------------------------
+     View: Cook — "what can I cook with what I have?"
+     ------------------------------------------------------------------ */
+
+  const PANTRY_KEY = "chefs-path-pantry";
+
+  function loadPantry() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(PANTRY_KEY) || "[]");
+      if (Array.isArray(raw)) return new Set(raw.filter(function (k) { return !!PANTRY.get(k); }));
+    } catch (e) { /* ignore */ }
+    return new Set();
+  }
+  function savePantry(set) {
+    try { localStorage.setItem(PANTRY_KEY, JSON.stringify(Array.from(set))); } catch (e) {}
+  }
+
+  function ingChip(ing, selected, withRemove) {
+    return '<button type="button" class="ing-chip' + (selected ? " on" : "") +
+      '" data-ing="' + ing.key + '">' +
+      '<span class="ing-emoji">' + ing.emoji + '</span>' + esc(ing.label) +
+      (withRemove ? ' <span class="ing-x">✕</span>' : "") + '</button>';
+  }
+
+  function viewCook() {
+    const selected = loadPantry();
+
+    let palette = "";
+    PANTRY.CATS.forEach(function (cat) {
+      const chips = PANTRY.byCat(cat.id).map(function (ing) {
+        return ingChip(ing, selected.has(ing.key), false);
+      }).join("");
+      palette += '<div class="ing-cat"><h3>' + t(cat.labelKey) + '</h3>' +
+        '<div class="ing-grid">' + chips + '</div></div>';
+    });
+
+    app.innerHTML =
+      '<h1 class="page-title">🧑‍🍳 ' + t("cook_title") + '</h1>' +
+      '<p class="page-sub">' + t("cook_sub") + '</p>' +
+      '<div class="card section-card">' +
+        '<input type="text" id="ing-search" class="settings-input" style="width:100%" placeholder="' + esc(t("cook_search")) + '">' +
+        '<div id="ing-selected-bar" class="ing-selected-bar"></div>' +
+        '<div id="ing-palette">' + palette + '</div>' +
+      '</div>' +
+      '<div id="cook-results"></div>';
+
+    function updateSelectedBar() {
+      const bar = document.getElementById("ing-selected-bar");
+      if (!selected.size) { bar.innerHTML = ""; return; }
+      const chips = Array.from(selected).map(function (k) {
+        const ing = PANTRY.get(k);
+        return ing ? ingChip(ing, true, true) : "";
+      }).join("");
+      bar.innerHTML = '<span class="ing-selected-label">' + t("cook_your") + ':</span> ' + chips +
+        ' <button type="button" id="ing-clear" class="ing-clear">' + t("cook_clear") + '</button>';
+      document.getElementById("ing-clear").addEventListener("click", function () {
+        selected.clear(); savePantry(selected);
+        syncPaletteStates(); updateSelectedBar(); updateResults();
+      });
+      bar.querySelectorAll(".ing-chip").forEach(function (chip) {
+        chip.addEventListener("click", function () { toggle(chip.getAttribute("data-ing")); });
+      });
+    }
+
+    function syncPaletteStates() {
+      document.querySelectorAll("#ing-palette .ing-chip").forEach(function (btn) {
+        btn.classList.toggle("on", selected.has(btn.getAttribute("data-ing")));
+      });
+    }
+
+    function recipeCardHtml(s) {
+      const haveChips = s.have.map(function (k) {
+        const ing = PANTRY.get(k);
+        return '<span class="mini-chip have">' + ing.emoji + " " + esc(ing.label) + "</span>";
+      }).join("");
+      const missChips = s.missing.map(function (k) {
+        const ing = PANTRY.get(k);
+        return '<span class="mini-chip miss">' + ing.emoji + " " + esc(ing.label) + "</span>";
+      }).join("");
+      return '<div class="card cook-recipe">' +
+        '<a class="cook-recipe-head" href="#/lesson/' + s.lessonId + '">' +
+          PICS.pic(s.lessonId, "thumb", s.recipe.name) +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="recipe-tile-title">' + esc(s.recipe.name) + '</div>' +
+            '<div class="recipe-tile-sub">' + t("level") + " " + s.level.id + " · ⏱ " + esc(s.recipe.time) + '</div>' +
+          '</div>' +
+        '</a>' +
+        '<div class="cook-chips">' + haveChips +
+          (missChips ? ' <span class="miss-label">' + t("cook_missing") + ':</span> ' + missChips : "") +
+        '</div>' +
+        '<a class="btn btn-ghost cook-open" href="#/lesson/' + s.lessonId + '">' + t("cook_open") + '</a>' +
+      '</div>';
+    }
+
+    function updateResults() {
+      const box = document.getElementById("cook-results");
+      if (!selected.size) {
+        box.innerHTML = '<div class="card empty-state"><div class="big">🥕</div><p>' +
+          t("cook_pick_hint") + '</p></div>';
+        return;
+      }
+      const results = PANTRY.suggest(selected);
+      if (!results.length) {
+        box.innerHTML = '<div class="card empty-state"><div class="big">🤔</div><p>' +
+          t("cook_none") + '</p></div>';
+        return;
+      }
+      const ready = results.filter(function (r) { return r.ready; });
+      const almost = results.filter(function (r) { return !r.ready; }).slice(0, 6);
+      let html = "";
+      if (ready.length) {
+        html += '<h2 class="cook-section">' + t("cook_ready") + '</h2>' +
+          ready.map(recipeCardHtml).join("");
+      }
+      if (almost.length) {
+        html += '<h2 class="cook-section">' + t("cook_almost") + '</h2>' +
+          almost.map(recipeCardHtml).join("");
+      }
+      box.innerHTML = html;
+    }
+
+    function toggle(key) {
+      if (selected.has(key)) selected.delete(key); else selected.add(key);
+      savePantry(selected);
+      syncPaletteStates(); updateSelectedBar(); updateResults();
+    }
+
+    document.querySelectorAll("#ing-palette .ing-chip").forEach(function (btn) {
+      btn.addEventListener("click", function () { toggle(btn.getAttribute("data-ing")); });
+    });
+
+    document.getElementById("ing-search").addEventListener("input", function (e) {
+      const q = e.target.value.trim().toLowerCase();
+      document.querySelectorAll("#ing-palette .ing-chip").forEach(function (btn) {
+        const ing = PANTRY.get(btn.getAttribute("data-ing"));
+        const match = !q || ing.label.toLowerCase().indexOf(q) !== -1 ||
+          ing.kws.some(function (k) { return k.indexOf(q) !== -1; });
+        btn.style.display = match ? "" : "none";
+      });
+      document.querySelectorAll("#ing-palette .ing-cat").forEach(function (cat) {
+        const anyVisible = Array.prototype.some.call(cat.querySelectorAll(".ing-chip"),
+          function (b) { return b.style.display !== "none"; });
+        cat.style.display = anyVisible ? "" : "none";
+      });
+    });
+
+    updateSelectedBar();
+    updateResults();
+  }
+
+  /* ------------------------------------------------------------------
+     View: Settings
+     ------------------------------------------------------------------ */
+
   function viewSettings() {
     const langOptions = I18N.LANGS.map(function (l) {
       return '<option value="' + l.code + '"' + (I18N.getLang() === l.code ? " selected" : "") + '>' +
@@ -1149,6 +1303,7 @@
       case "lesson": setActiveNav("learn"); viewLesson(parts[1]); break;
       case "progress": setActiveNav("progress"); viewProgress(); break;
       case "recipes": setActiveNav("recipes"); viewRecipes(); break;
+      case "cook": setActiveNav("cook"); viewCook(); break;
       case "timer": setActiveNav("timer"); viewTimer(); break;
       case "settings": setActiveNav("settings"); viewSettings(); break;
       default: setActiveNav(""); viewNotFound();
