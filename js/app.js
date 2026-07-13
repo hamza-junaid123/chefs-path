@@ -295,14 +295,14 @@
 
   /* Color palette (independent of light/dark): "classic" | "neon" */
   const PALETTE_KEY = "chefs-path-palette";
-  const PALETTES = ["classic", "neon"];
+  const PALETTES = ["classic", "neon", "sunset"];
 
   function currentPalette() {
     const p = localStorage.getItem(PALETTE_KEY);
     return PALETTES.indexOf(p) !== -1 ? p : "classic";
   }
   function applyPalette(p) {
-    if (p === "neon") document.documentElement.setAttribute("data-palette", "neon");
+    if (p && p !== "classic") document.documentElement.setAttribute("data-palette", p);
     else document.documentElement.removeAttribute("data-palette");
   }
   applyPalette(currentPalette());
@@ -1301,6 +1301,7 @@
         '<select class="settings-select" id="palette-select">' +
           '<option value="classic"' + (currentPalette() === "classic" ? " selected" : "") + '>' + t("palette_classic") + '</option>' +
           '<option value="neon"' + (currentPalette() === "neon" ? " selected" : "") + '>' + t("palette_neon") + '</option>' +
+          '<option value="sunset"' + (currentPalette() === "sunset" ? " selected" : "") + '>' + t("palette_sunset") + '</option>' +
         '</select>' +
       '</div>' +
 
