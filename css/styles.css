@@ -1,55 +1,57 @@
 /* ==========================================================================
    Chef's Path — styles
-   Warm, clean visual style. Theming via CSS variables on <html data-theme>.
+   Blue / purple / black visual style. Theming via CSS variables on
+   <html data-theme>. Purple is the primary accent, blue the secondary (so
+   gradients flow blue↔purple); green is kept only for success semantics.
    ========================================================================== */
 
 :root {
-  --bg: #faf6ef;
-  --bg-2: #f2e8d9;
-  --bg-accent: #f1e6d6;
-  --card: #fffdfa;
-  --card-soft: #fbf5ec;
-  --text: #33281d;
-  --text-soft: #857463;
-  --accent: #c6592f;
-  --accent-strong: #a8461f;
-  --accent-2: #dc8b3d;
-  --accent-soft: #f7e4d6;
-  --green: #4e7d43;
-  --green-soft: #e6f0e0;
-  --gold: #c0902f;
-  --border: #ece1d0;
-  --border-strong: #e0d2ba;
-  --shadow-sm: 0 1px 2px rgba(84, 54, 28, 0.06);
-  --shadow: 0 4px 16px rgba(84, 54, 28, 0.09);
-  --shadow-lift: 0 14px 34px rgba(84, 54, 28, 0.17);
+  --bg: #f6f7fc;
+  --bg-2: #ece9fb;
+  --bg-accent: #e9e6f8;
+  --card: #ffffff;
+  --card-soft: #f7f7fd;
+  --text: #14121f;
+  --text-soft: #5b5772;
+  --accent: #6c3ce9;
+  --accent-strong: #5121c4;
+  --accent-2: #2f6bff;
+  --accent-soft: #e8e1fb;
+  --green: #1f9d6b;
+  --green-soft: #dbf3e9;
+  --gold: #2f7dff;
+  --border: #e5e3f1;
+  --border-strong: #d2cfe8;
+  --shadow-sm: 0 1px 2px rgba(38, 26, 86, 0.07);
+  --shadow: 0 4px 16px rgba(38, 26, 86, 0.10);
+  --shadow-lift: 0 14px 34px rgba(38, 26, 86, 0.20);
   --radius-sm: 10px;
   --radius: 16px;
   --radius-lg: 22px;
-  --danger: #b8402e;
+  --danger: #d5324c;
 }
 
 [data-theme="dark"] {
-  --bg: #1b1611;
-  --bg-2: #241d15;
-  --bg-accent: #2b2219;
-  --card: #2a221a;
-  --card-soft: #32281f;
-  --text: #f1e8db;
-  --text-soft: #b6a891;
-  --accent: #e6875a;
-  --accent-strong: #f2986c;
-  --accent-2: #e2a45c;
-  --accent-soft: #45321f;
-  --green: #8fbd80;
-  --green-soft: #2c3826;
-  --gold: #d8ad52;
-  --border: #443829;
-  --border-strong: #53422f;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow: 0 4px 18px rgba(0, 0, 0, 0.42);
-  --shadow-lift: 0 14px 36px rgba(0, 0, 0, 0.55);
-  --danger: #e0705f;
+  --bg: #09090f;
+  --bg-2: #0e0e1b;
+  --bg-accent: #16162a;
+  --card: #14141f;
+  --card-soft: #1c1c2c;
+  --text: #ece9f8;
+  --text-soft: #a7a2c2;
+  --accent: #8b5cff;
+  --accent-strong: #a481ff;
+  --accent-2: #4d84ff;
+  --accent-soft: #231c40;
+  --green: #3ecf8e;
+  --green-soft: #14291f;
+  --gold: #4d9dff;
+  --border: #262539;
+  --border-strong: #363154;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+  --shadow-lift: 0 14px 36px rgba(0, 0, 0, 0.62);
+  --danger: #ff5d73;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
