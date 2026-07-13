@@ -54,6 +54,76 @@
   --danger: #ff5d73;
 }
 
+/* ---------- Neon palette (data-palette="neon") ---------- */
+
+:root[data-palette="neon"] {
+  --bg: #f6f4ff;
+  --bg-2: #eee7ff;
+  --bg-accent: #e9dcff;
+  --card: #ffffff;
+  --card-soft: #faf7ff;
+  --text: #120a24;
+  --text-soft: #564a70;
+  --accent: #8f00ff;
+  --accent-strong: #6b00d4;
+  --accent-2: #0091ff;
+  --accent-soft: #efe0ff;
+  --green: #00b368;
+  --green-soft: #d6f7e8;
+  --gold: #0091ff;
+  --border: #e6ddf7;
+  --border-strong: #d1c2ef;
+  --shadow-sm: 0 1px 2px rgba(100, 20, 180, 0.10);
+  --shadow: 0 4px 16px rgba(120, 20, 220, 0.16);
+  --shadow-lift: 0 10px 30px rgba(120, 20, 220, 0.28);
+  --danger: #e5105a;
+}
+
+:root[data-palette="neon"][data-theme="dark"] {
+  --bg: #05030d;
+  --bg-2: #0a0616;
+  --bg-accent: #150b28;
+  --card: #0d0a1a;
+  --card-soft: #150f28;
+  --text: #f3ecff;
+  --text-soft: #b6a2da;
+  --accent: #b026ff;
+  --accent-strong: #c94dff;
+  --accent-2: #00e5ff;
+  --accent-soft: #241041;
+  --green: #39ff9e;
+  --green-soft: #0e2a1e;
+  --gold: #00e5ff;
+  --border: #2a1a4d;
+  --border-strong: #3d2870;
+  --shadow-sm: 0 0 3px rgba(176, 38, 255, 0.45);
+  --shadow: 0 0 16px rgba(176, 38, 255, 0.28);
+  --shadow-lift: 0 0 30px rgba(176, 38, 255, 0.55);
+  --danger: #ff2d6b;
+}
+
+/* Neon glow accents (both light & dark, stronger in dark via the shadows above) */
+:root[data-palette="neon"] .btn-primary,
+:root[data-palette="neon"] .chef-fab,
+:root[data-palette="neon"] .lesson-status.done,
+:root[data-palette="neon"] .btn-success {
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+:root[data-palette="neon"] .hero,
+:root[data-palette="neon"] .level-card:not(.locked):hover,
+:root[data-palette="neon"] .cook-recipe:hover,
+:root[data-palette="neon"] .recipe-tile:hover {
+  box-shadow: 0 0 30px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+:root[data-palette="neon"] .page-title,
+:root[data-palette="neon"] .hero h2,
+:root[data-palette="neon"] .brand-name {
+  text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+:root[data-palette="neon"] .main-nav a.active {
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* The hidden attribute must always win, even over flex/inline-flex display

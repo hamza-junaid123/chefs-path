@@ -293,6 +293,20 @@
 
   applyTheme(currentTheme());
 
+  /* Color palette (independent of light/dark): "classic" | "neon" */
+  const PALETTE_KEY = "chefs-path-palette";
+  const PALETTES = ["classic", "neon"];
+
+  function currentPalette() {
+    const p = localStorage.getItem(PALETTE_KEY);
+    return PALETTES.indexOf(p) !== -1 ? p : "classic";
+  }
+  function applyPalette(p) {
+    if (p === "neon") document.documentElement.setAttribute("data-palette", "neon");
+    else document.documentElement.removeAttribute("data-palette");
+  }
+  applyPalette(currentPalette());
+
   /* ------------------------------------------------------------------
      Language / chrome
      ------------------------------------------------------------------ */
@@ -1282,6 +1296,16 @@
 
       '<div class="card settings-row">' +
         '<div class="settings-row-body">' +
+          '<h3>🎨 ' + t("palette_title") + '</h3><p>' + t("palette_desc") + '</p>' +
+        '</div>' +
+        '<select class="settings-select" id="palette-select">' +
+          '<option value="classic"' + (currentPalette() === "classic" ? " selected" : "") + '>' + t("palette_classic") + '</option>' +
+          '<option value="neon"' + (currentPalette() === "neon" ? " selected" : "") + '>' + t("palette_neon") + '</option>' +
+        '</select>' +
+      '</div>' +
+
+      '<div class="card settings-row">' +
+        '<div class="settings-row-body">' +
           '<h3>🌍 ' + t("language") + '</h3><p>' + t("language_desc") + '</p>' +
         '</div>' +
         '<select class="settings-select" id="lang-select">' + langOptions + '</select>' +
@@ -1324,6 +1348,12 @@
       I18N.setLang(e.target.value);
       applyChrome();
       viewSettings();
+    });
+
+    document.getElementById("palette-select").addEventListener("change", function (e) {
+      const p = e.target.value;
+      localStorage.setItem(PALETTE_KEY, p);
+      applyPalette(p);
     });
 
     bindAiConfig();
