@@ -295,7 +295,7 @@
 
   /* Color palette (independent of light/dark): "classic" | "neon" */
   const PALETTE_KEY = "chefs-path-palette";
-  const PALETTES = ["classic", "neon", "sunset"];
+  const PALETTES = ["classic", "neon", "sunset", "ocean", "forest"];
 
   function currentPalette() {
     const p = localStorage.getItem(PALETTE_KEY);
@@ -1302,6 +1302,8 @@
           '<option value="classic"' + (currentPalette() === "classic" ? " selected" : "") + '>' + t("palette_classic") + '</option>' +
           '<option value="neon"' + (currentPalette() === "neon" ? " selected" : "") + '>' + t("palette_neon") + '</option>' +
           '<option value="sunset"' + (currentPalette() === "sunset" ? " selected" : "") + '>' + t("palette_sunset") + '</option>' +
+          '<option value="ocean"' + (currentPalette() === "ocean" ? " selected" : "") + '>' + t("palette_ocean") + '</option>' +
+          '<option value="forest"' + (currentPalette() === "forest" ? " selected" : "") + '>' + t("palette_forest") + '</option>' +
         '</select>' +
       '</div>' +
 

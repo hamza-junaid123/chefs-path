@@ -179,6 +179,110 @@
     linear-gradient(135deg, var(--accent-soft), var(--card));
 }
 
+/* ---------- Ocean palette (data-palette="ocean") ---------- */
+
+:root[data-palette="ocean"] {
+  --bg: #f1f8fb;
+  --bg-2: #dbecf3;
+  --bg-accent: #d3e8f0;
+  --card: #ffffff;
+  --card-soft: #f3fafc;
+  --text: #0f2830;
+  --text-soft: #4d6f78;
+  --accent: #0e7fb0;
+  --accent-strong: #0a5f88;
+  --accent-2: #16b6b0;
+  --accent-soft: #d4eef4;
+  --green: #1a9e7a;
+  --green-soft: #d6f3ea;
+  --gold: #16b6b0;
+  --border: #dae9ee;
+  --border-strong: #c3dbe4;
+  --shadow-sm: 0 1px 2px rgba(20, 70, 90, 0.08);
+  --shadow: 0 4px 16px rgba(20, 80, 100, 0.13);
+  --shadow-lift: 0 12px 30px rgba(20, 80, 100, 0.22);
+  --danger: #d23b4e;
+}
+
+:root[data-palette="ocean"][data-theme="dark"] {
+  --bg: #06161d;
+  --bg-2: #0a1f28;
+  --bg-accent: #0f2b35;
+  --card: #0c2029;
+  --card-soft: #102a34;
+  --text: #e6f6fb;
+  --text-soft: #9bc0cc;
+  --accent: #2ec5d6;
+  --accent-strong: #4fd6e4;
+  --accent-2: #3d8bff;
+  --accent-soft: #10363f;
+  --green: #4fd6a0;
+  --green-soft: #10312a;
+  --gold: #3d8bff;
+  --border: #1c3d48;
+  --border-strong: #2a5461;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lift: 0 14px 34px rgba(46, 197, 214, 0.24);
+  --danger: #ff5d73;
+}
+
+/* ---------- Forest palette (data-palette="forest") ---------- */
+
+:root[data-palette="forest"] {
+  --bg: #f4f7ee;
+  --bg-2: #e6efd7;
+  --bg-accent: #e0ebd0;
+  --card: #ffffff;
+  --card-soft: #f6faf0;
+  --text: #1f2a17;
+  --text-soft: #5e6e4f;
+  --accent: #3f8f4e;
+  --accent-strong: #2f6d3a;
+  --accent-2: #8bbf3c;
+  --accent-soft: #dcecd2;
+  --green: #2f9e6a;
+  --green-soft: #daf1e2;
+  --gold: #a8bf3a;
+  --border: #dfe8d1;
+  --border-strong: #cad9b7;
+  --shadow-sm: 0 1px 2px rgba(40, 60, 30, 0.08);
+  --shadow: 0 4px 16px rgba(40, 70, 30, 0.13);
+  --shadow-lift: 0 12px 30px rgba(40, 70, 30, 0.22);
+  --danger: #c0392b;
+}
+
+:root[data-palette="forest"][data-theme="dark"] {
+  --bg: #0b140b;
+  --bg-2: #0f1b0f;
+  --bg-accent: #152515;
+  --card: #111c11;
+  --card-soft: #172617;
+  --text: #eaf3e2;
+  --text-soft: #a6bd97;
+  --accent: #5cc46a;
+  --accent-strong: #74d382;
+  --accent-2: #a8d84a;
+  --accent-soft: #16301a;
+  --green: #4fd6a0;
+  --green-soft: #12301f;
+  --gold: #cbb04a;
+  --border: #24361f;
+  --border-strong: #33492b;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lift: 0 14px 34px rgba(92, 196, 106, 0.22);
+  --danger: #ff6f61;
+}
+
+/* Themed hero wash for the nature palettes. */
+:root[data-palette="ocean"] .hero,
+:root[data-palette="forest"] .hero {
+  background:
+    radial-gradient(120% 150% at 100% 0%, color-mix(in srgb, var(--accent-2) 22%, transparent) 0%, transparent 58%),
+    linear-gradient(135deg, var(--accent-soft), var(--card));
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* The hidden attribute must always win, even over flex/inline-flex display
