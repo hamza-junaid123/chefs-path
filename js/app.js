@@ -1027,14 +1027,26 @@
   function voiceDiagRows() {
     if (typeof Voice === "undefined" || !Voice.supported()) return "";
     return I18N.LANGS.map(function (l) {
-      const v = Voice.matchLang(l.code);
-      const ok = !!v;
+      const list = Voice.voicesForLang(l.code);
+      const ok = list.length > 0;
+      const pref = Voice.getPreferred(l.code);
+      const options = '<option value="">' + t("voice_auto") + '</option>' +
+        list.map(function (v) {
+          return '<option value="' + esc(v.name) + '"' + (v.name === pref ? " selected" : "") + '>' +
+            esc(v.name) + '</option>';
+        }).join("");
       return '<div class="voice-diag-row" data-code="' + l.code + '">' +
-        '<span class="voice-diag-name">' + esc(l.name) + '</span>' +
-        '<span class="voice-diag-status ' + (ok ? "ok" : "no") + '">' +
-          (ok ? t("voice_ready") : t("voice_none")) + '</span>' +
-        '<button class="btn btn-ghost voice-diag-test" data-code="' + l.code + '"' +
-          (ok ? "" : " disabled") + '>' + t("voice_test") + '</button>' +
+        '<div class="voice-diag-head">' +
+          '<span class="voice-diag-name">' + esc(l.name) + '</span>' +
+          '<span class="voice-diag-status ' + (ok ? "ok" : "no") + '">' +
+            (ok ? t("voice_ready") : t("voice_none")) + '</span>' +
+        '</div>' +
+        (ok
+          ? '<div class="voice-diag-ctl">' +
+              '<select class="settings-select voice-diag-select" data-code="' + l.code + '">' + options + '</select>' +
+              '<button class="btn btn-ghost voice-diag-test" data-code="' + l.code + '">' + t("voice_test") + '</button>' +
+            '</div>'
+          : "") +
       '</div>';
     }).join("");
   }
@@ -1047,6 +1059,13 @@
   }
 
   function bindVoiceDiag() {
+    document.querySelectorAll(".voice-diag-select").forEach(function (sel) {
+      sel.addEventListener("change", function () {
+        const code = sel.getAttribute("data-code");
+        Voice.setPreferred(code, sel.value);
+        Voice.speak(VOICE_SAMPLES[code] || "Hello", null, Voice.localeOf(code)); // preview
+      });
+    });
     document.querySelectorAll(".voice-diag-test").forEach(function (btn) {
       btn.addEventListener("click", function () {
         const code = btn.getAttribute("data-code");

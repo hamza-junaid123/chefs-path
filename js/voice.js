@@ -73,8 +73,32 @@ const Voice = (function () {
     return s;
   }
 
-  /* Best-sounding installed voice for a locale (language-subtag match, ranked
-     by quality). */
+  /* User-chosen voice per language (Settings picker) — overrides auto-pick. */
+  const PREF_KEY = "chefs-path-voices"; // { en: "Voice name", ur: "...", ... }
+  function prefs() {
+    try { return JSON.parse(localStorage.getItem(PREF_KEY) || "{}") || {}; }
+    catch (e) { return {}; }
+  }
+  function getPreferred(code) { return prefs()[code] || ""; }
+  function setPreferred(code, name) {
+    const p = prefs();
+    if (name) p[code] = name; else delete p[code];
+    try { localStorage.setItem(PREF_KEY, JSON.stringify(p)); } catch (e) {}
+  }
+
+  /* All installed voices for an app language, best-sounding first (for the
+     Settings dropdown). */
+  function voicesForLang(code) {
+    if (!voices.length) loadVoices();
+    const want = localeOf(code).toLowerCase();
+    const sub = want.split("-")[0];
+    return voices.filter(function (v) {
+      return v.lang && v.lang.toLowerCase().split("-")[0] === sub;
+    }).sort(function (a, b) { return voiceScore(b, want) - voiceScore(a, want); });
+  }
+
+  /* Best voice for a locale: the user's pick (if set & available), else the
+     highest-scoring natural voice. */
   function findVoice(locale) {
     if (!voices.length) loadVoices();
     if (!voices.length) return null;
@@ -84,6 +108,16 @@ const Voice = (function () {
       return v.lang && v.lang.toLowerCase().split("-")[0] === sub;
     });
     if (!cands.length) return null;
+    // Honor a user-chosen voice for any app language that maps to this subtag.
+    for (const code in SPEECH_LOCALE) {
+      if (localeOf(code).toLowerCase().split("-")[0] === sub) {
+        const prefName = getPreferred(code);
+        if (prefName) {
+          const pv = cands.find(function (v) { return v.name === prefName; });
+          if (pv) return pv;
+        }
+      }
+    }
     cands.sort(function (a, b) { return voiceScore(b, want) - voiceScore(a, want); });
     return cands[0];
   }
@@ -216,6 +250,7 @@ const Voice = (function () {
 
   return {
     supported: supported, speak: speak, announce: announce, stop: stop, bind: bind,
-    matchLang: matchLang, localeOf: localeOf, onVoices: onVoices, loadVoices: loadVoices
+    matchLang: matchLang, localeOf: localeOf, onVoices: onVoices, loadVoices: loadVoices,
+    voicesForLang: voicesForLang, getPreferred: getPreferred, setPreferred: setPreferred
   };
 })();

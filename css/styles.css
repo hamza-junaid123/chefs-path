@@ -1495,18 +1495,23 @@ a.lesson-row:hover { transform: translateX(2px); }
 /* ---------- Voice diagnostic (Settings) ---------- */
 
 .voice-diag-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0;
+  padding: 0.7rem 0;
   border-bottom: 1px dashed var(--border);
 }
 .voice-diag-row:last-child { border-bottom: none; }
+.voice-diag-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
 .voice-diag-name { flex: 1; font-weight: 600; min-width: 0; }
 .voice-diag-status { font-size: 0.85rem; font-weight: 700; white-space: nowrap; }
 .voice-diag-status.ok { color: var(--green); }
 .voice-diag-status.no { color: var(--text-soft); }
-.voice-diag-test { padding: 0.3rem 0.9rem; font-size: 0.85rem; }
+.voice-diag-ctl { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.voice-diag-select { flex: 1; min-width: 12rem; max-width: 100%; }
+.voice-diag-test { padding: 0.35rem 0.95rem; font-size: 0.85rem; flex-shrink: 0; }
 .voice-diag-test[disabled] { opacity: 0.4; cursor: not-allowed; }
 
 /* ---------- RTL polish ---------- */
