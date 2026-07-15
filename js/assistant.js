@@ -260,7 +260,10 @@ const Assistant = (function () {
   }
 
   async function callOpenAICompatible(cfg, msgs) {
-    let base = (cfg.baseUrl || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
+    // Only the "custom" provider uses a base URL; OpenAI always hits OpenAI,
+    // so a stale baseUrl left over from Custom can't misroute the request.
+    const rawBase = (cfg.provider === "custom" && cfg.baseUrl) ? cfg.baseUrl : "https://api.openai.com/v1";
+    let base = rawBase.trim().replace(/\/+$/, "");
     const res = await fetch(base + "/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.key },

@@ -1278,18 +1278,21 @@
       modelInput.placeholder = meta.model || "model";
       const hint = document.getElementById("ai-model-hint");
       if (hint) hint.textContent = "e.g. " + (MODEL_EXAMPLES[providerSel.value] || "");
-      document.getElementById("ai-base-field").hidden = !meta.base;
+      const baseField = document.getElementById("ai-base-field");
+      baseField.hidden = !meta.base;
+      if (!meta.base) document.getElementById("ai-base").value = ""; // avoid stale base URL
     });
 
     document.getElementById("ai-save").addEventListener("click", function () {
       const key = document.getElementById("ai-key").value.trim();
       if (!key) { document.getElementById("ai-key").focus(); return; }
+      const meta = Assistant.PROVIDERS[providerSel.value];
       const baseEl = document.getElementById("ai-base");
       Assistant.setAiConfig({
         provider: providerSel.value,
         key: key,
         model: document.getElementById("ai-model").value.trim(),
-        baseUrl: baseEl ? baseEl.value.trim() : ""
+        baseUrl: (meta.base && baseEl) ? baseEl.value.trim() : "" // base only for custom
       });
       toast(t("saved"));
       Assistant.refreshChrome();
