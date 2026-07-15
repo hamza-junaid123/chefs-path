@@ -1491,6 +1491,11 @@ a.lesson-row:hover { transform: translateX(2px); }
   color: var(--text-soft);
   margin-top: 0.7rem;
 }
+.ai-model-hint {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  margin-top: 0.3rem;
+}
 
 /* ---------- Voice diagnostic (Settings) ---------- */
 

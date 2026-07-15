@@ -1229,6 +1229,13 @@
      ------------------------------------------------------------------ */
 
   /* AI provider config form (inside Settings). */
+  const MODEL_EXAMPLES = {
+    openai: "gpt-4o-mini · gpt-4o · gpt-3.5-turbo",
+    anthropic: "claude-3-5-sonnet-latest · claude-3-5-haiku-latest",
+    gemini: "gemini-1.5-flash · gemini-1.5-pro · gemini-2.0-flash",
+    custom: "your endpoint's exact model id (e.g. llama-3.3-70b-versatile)"
+  };
+
   function aiConfigHtml() {
     const cfg = Assistant.aiConfig();
     const provider = (cfg && cfg.provider) || "openai";
@@ -1247,7 +1254,8 @@
           (cfg ? esc(cfg.key) : "") + '"></div>' +
       '<div class="ai-field"><label>' + t("ai_model") + '</label>' +
         '<input type="text" class="settings-input" id="ai-model" placeholder="' +
-          esc(meta.model || "model") + '" value="' + esc(model) + '"></div>' +
+          esc(meta.model || "model") + '" value="' + esc(model) + '">' +
+        '<p class="ai-model-hint" id="ai-model-hint">e.g. ' + esc(MODEL_EXAMPLES[provider] || "") + '</p></div>' +
       '<div class="ai-field" id="ai-base-field"' + (meta.base ? "" : " hidden") + '><label>' +
         t("ai_base_url") + '</label>' +
         '<input type="text" class="settings-input" id="ai-base" placeholder="https://…/v1" value="' +
@@ -1268,6 +1276,8 @@
       const modelInput = document.getElementById("ai-model");
       modelInput.value = meta.model || "";
       modelInput.placeholder = meta.model || "model";
+      const hint = document.getElementById("ai-model-hint");
+      if (hint) hint.textContent = "e.g. " + (MODEL_EXAMPLES[providerSel.value] || "");
       document.getElementById("ai-base-field").hidden = !meta.base;
     });
 
