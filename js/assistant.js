@@ -240,6 +240,25 @@ const Assistant = (function () {
     return callOpenAICompatible(cfg, msgs); // openai + custom
   }
 
+  /* Build a helpful Error from a failed response (surfaces the real reason). */
+  async function httpError(res) {
+    let detail = "";
+    try {
+      const body = await res.text();
+      try {
+        const j = JSON.parse(body);
+        detail = (j.error && (j.error.message || j.error.code || j.error.status)) ||
+          j.message || (typeof j.error === "string" ? j.error : "");
+      } catch (e) { detail = body.slice(0, 200); }
+    } catch (e) { /* no body */ }
+    const hint =
+      (res.status === 401 || res.status === 403) ? " — key invalid or lacks access to this model" :
+      res.status === 404 ? " — model name or endpoint not found" :
+      res.status === 429 ? " — rate limit, or no credit/quota on your account" :
+      res.status >= 500 ? " — the provider is having trouble, try again" : "";
+    return new Error("HTTP " + res.status + hint + (detail ? " · " + detail : ""));
+  }
+
   async function callOpenAICompatible(cfg, msgs) {
     let base = (cfg.baseUrl || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
     const res = await fetch(base + "/chat/completions", {
@@ -251,7 +270,7 @@ const Assistant = (function () {
         max_tokens: 700, temperature: 0.6
       })
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    if (!res.ok) throw await httpError(res);
     const data = await res.json();
     return data.choices[0].message.content.trim();
   }
@@ -274,7 +293,7 @@ const Assistant = (function () {
         })
       })
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    if (!res.ok) throw await httpError(res);
     const data = await res.json();
     return (data.content && data.content[0] && data.content[0].text || "").trim();
   }
@@ -291,7 +310,7 @@ const Assistant = (function () {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ system_instruction: { parts: [{ text: systemPrompt() }] }, contents: contents })
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    if (!res.ok) throw await httpError(res);
     const data = await res.json();
     const parts = data.candidates && data.candidates[0] && data.candidates[0].content &&
       data.candidates[0].content.parts;
@@ -374,9 +393,13 @@ const Assistant = (function () {
       const thinking = addMsg("assistant", t("assistant_thinking"));
       try {
         answer = await callAI(history.slice(-10));
-        if (!answer) throw new Error("empty");
+        if (!answer) throw new Error("the provider returned an empty reply");
       } catch (e) {
-        answer = t("assistant_error") + "\n\n" + offlineAnswer(q);
+        let reason = (e && e.message) || "unknown error";
+        if (/failed to fetch|networkerror|load failed/i.test(reason)) {
+          reason += " (network blocked, or this provider/endpoint doesn't allow direct browser calls — CORS)";
+        }
+        answer = t("assistant_error") + "\n\n⚠️ **" + reason + "**\n\n" + offlineAnswer(q);
       }
       thinking.remove();
       busy = false;
